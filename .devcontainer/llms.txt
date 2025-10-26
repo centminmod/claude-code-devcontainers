@@ -1,8 +1,5 @@
 # VS Code Development Containers for Claude Code and Multi-AI Environments
 
-**Version**: Draft 5
-**Last Updated**: 2025-10-26
-
 > **AI Assistant Guidance**: This document provides comprehensive instructions for creating, configuring, and managing VS Code development containers optimized for Claude Code and other AI coding assistants. Use this as a complete reference when helping users set up devcontainer environments.
 
 > **Official Documentation**: https://docs.claude.com/en/docs/claude-code/devcontainer
@@ -55,16 +52,17 @@ code .
 
 ### Core Concepts
 6. [Architecture Overview](#architecture-overview)
-7. [Official devcontainer.json Property Reference](#official-devcontainerjson-property-reference) ⭐ **New in Draft 4**
+7. [Official devcontainer.json Property Reference](#official-devcontainerjson-property-reference)
 8. [AI Decision Trees](#ai-decision-trees) ⭐ **For AI Assistants**
-9. [AI Assistant Quick Commands](#ai-assistant-quick-commands) ⭐ **New in Draft 5**
+9. [AI Assistant Quick Commands](#ai-assistant-quick-commands)
+   - [AI Assistant Discovery Protocol](#ai-assistant-discovery-protocol)
 10. [Common Stack Examples](#common-stack-examples)
-11. [Prebuild Images & CI/CD Automation](#prebuild-images--cicd-automation) ⭐ **New in Draft 4**
-12. [Creating & Distributing Templates](#creating--distributing-templates) ⭐ **New in Draft 4**
+11. [Prebuild Images & CI/CD Automation](#prebuild-images--cicd-automation)
+12. [Creating & Distributing Templates](#creating--distributing-templates)
 
 ### Implementation
 13. [Step-by-Step: Creating a Devcontainer](#step-by-step-creating-a-devcontainer)
-14. [Lifecycle Hooks Explained](#lifecycle-hooks-explained) ⭐ **New in Draft 4**
+14. [Lifecycle Hooks Explained](#lifecycle-hooks-explained)
 15. [Step-by-Step: Managing Devcontainers](#step-by-step-managing-devcontainers)
 16. [Multi-AI Configuration](#multi-ai-configuration)
 17. [MCP Server Setup](#mcp-server-setup)
@@ -74,10 +72,10 @@ code .
 19. [Volume Persistence Patterns](#volume-persistence-patterns)
 20. [Platform-Specific Notes](#platform-specific-notes)
 21. [Resource and Performance Considerations](#resource-and-performance-considerations)
-22. [VS Code Tips & Tricks](#vs-code-tips--tricks) ⭐ **New in Draft 4**
-23. [Remote Development Platforms](#remote-development-platforms) ⭐ **New in Draft 5**
-24. [Devcontainer CLI Reference](#devcontainer-cli-reference) ⭐ **New in Draft 4**
-25. [Migration Guides](#migration-guides) ⭐ **New in Draft 5**
+22. [VS Code Tips & Tricks](#vs-code-tips--tricks)
+23. [Remote Development Platforms](#remote-development-platforms)
+24. [Devcontainer CLI Reference](#devcontainer-cli-reference)
+25. [Migration Guides](#migration-guides)
 
 ### Troubleshooting
 26. [Step-by-Step Debug Process](#step-by-step-debug-process)
@@ -796,7 +794,7 @@ How complex is the project setup?
 
 1. **Scan First, Ask Smart**: Auto-detect project details before asking questions
 2. **Adapt to Expertise**: One question determines verbosity for all subsequent interactions
-3. **Minimize Questions**: Maximum 4 questions for beginners, 2 for experts
+3. **Minimize Questions**: Maximum 4 questions for beginners, 3 for intermediate, 2 for experts
 4. **Provide Defaults**: Every question has a sensible default (press Enter)
 5. **Show, Don't Interrogate**: Present proposed configuration for approval
 
@@ -4420,47 +4418,6 @@ Team members in VS Code:
 - **Official Template Browser**: https://containers.dev/templates
 
 ---
-
-**END OF DRAFT 4 ADDITIONS**
-
----
-
-### Integration Instructions for Templates
-
-To integrate these sections into `.devcontainer/llms.txt`:
-
-### 1. Update Table of Contents
-Add to ToC:
-- Official devcontainer.json Property Reference (after Architecture Overview)
-- Lifecycle Hooks Explained (after Step-by-Step: Creating)
-- Prebuild Images & CI/CD Automation (after Common Stack Examples)
-- Creating & Distributing Templates (after Prebuild Images)
-
-### 2. Insert Sections
-Insert each section at the locations indicated above.
-
-### 3. Add Additional Sections
-Still to be added in subsequent edits:
-- VS Code Tips & Tricks
-- Devcontainer CLI Reference
-- Enhanced MCP content with Docker MCP Toolkit
-- Enhanced Security content with Docker ECI
-- Citation additions throughout existing sections
-
-### 4. Draft 5 Planning
-After integration, re-evaluate for:
-- Completeness gaps
-- Additional advanced topics
-- Citation quality
-- User journey coverage
-
----
-
----
-
-
----
-
 
 ### Method 1: Start from Scratch (Full Control)
 
