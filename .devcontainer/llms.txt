@@ -675,19 +675,29 @@ User's primary language?
 
 ### Decision Tree 2: MCP Transport Type
 
+**How to determine transport**: See "Testing MCP Server Transport Support" section below for testing methodology.
+
 ```
 MCP server needs what?
 ├─ External API (Context7, Cloudflare Docs)
-│   └─ Use: transport.type = "sse"
-│        URL: https://service.com/sse
+│   ├─ Context7
+│   │   └─ Use: transport.type = "sse" (only option as of Oct 27, 2025)
+│   │        URL: https://mcp.context7.com/sse
+│   │
+│   └─ Cloudflare Docs (two options)
+│       ├─ SSE (public, simple): transport.type = "sse"
+│       │    URL: https://docs.mcp.cloudflare.com/sse
+│       │
+│       └─ mcp-remote (OAuth, recommended): transport.type = "stdio"
+│            Command: npx mcp-remote https://docs.mcp.cloudflare.com/mcp
 │
 ├─ Local npm package (Chrome DevTools)
 │   └─ Use: transport.type = "stdio"
 │        Command: npx package-name
 │
 └─ Custom server
-    └─ Use: transport.type = "sse" or "stdio"
-         Read server docs
+    └─ Test to determine: Use curl or try both transports
+         See "Testing MCP Server Transport Support" section
 ```
 
 ### Decision Tree 3: Volume or Bind Mount?
@@ -5144,7 +5154,7 @@ ls -la ~/.claude ~/.codex ~/.gemini
 
 **Why optimize for devcontainers?**
 - Devcontainers are **isolated** from host system (limited damage potential)
-- Network firewall restricts outbound connections (controlled security boundary)
+- Network firewall restricts outbound connections with IPv6 disabled (controlled security boundary)
 - All tool executions are **auditable** via logs and telemetry
 - Environment is **disposable** (can rebuild anytime if issues occur)
 - Running as non-root user limits impact
@@ -5247,11 +5257,12 @@ fi
 
 **Why this is SAFE in devcontainers**:
 1. ✅ **Isolated environment** - Container can't access host files directly
-2. ✅ **Network firewall** - Outbound connections restricted to whitelisted domains
+2. ✅ **Network firewall** - Outbound connections restricted to whitelisted domains (IPv4 + IPv6 disabled)
 3. ✅ **Non-root user** - Limited privilege (e.g., `node` user UID 1000)
 4. ✅ **Auditable** - All tool executions logged via OpenTelemetry/Prometheus
 5. ✅ **Disposable** - Can rebuild container if compromised
 6. ✅ **Volume isolation** - Each project gets separate credential volumes
+7. ✅ **IPv6 bypass prevented** - IPv6 disabled at kernel level before firewall rules applied
 
 **When NOT to use these flags**:
 - ❌ Running on host system (not in container)
@@ -5343,15 +5354,75 @@ MCP servers use two transport mechanisms:
   }
 }
 ```
-- **Use when**: Server runs as local npm package (Chrome DevTools)
+- **Use when**: Server runs as local npm package (Chrome DevTools, mcp-remote)
 - **Pros**: Works offline, full control
 - **Cons**: Needs installation, manual updates
 
+### Testing MCP Server Transport Support
+
+Before configuring an MCP server, test which transport methods it supports:
+
+#### Method 1: Check Official Documentation
+
+Always check the server's documentation first. Examples:
+- **Context7**: https://context7.com/mcp (documents SSE endpoint)
+- **Cloudflare**: https://developers.cloudflare.com/agents/model-context-protocol/
+
+#### Method 2: Test with curl
+
+```bash
+# Test SSE endpoint (Server-Sent Events)
+curl -v https://mcp.context7.com/sse
+# Expected: HTTP/1.1 200 OK or 204 No Content
+
+# Test HTTP endpoint
+curl -v -X POST https://api.example.com/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","method":"initialize","params":{},"id":1}'
+# Expected: JSON-RPC response if supported
+```
+
+#### Method 3: Try Both Transports
+
+```bash
+# Test SSE transport
+claude mcp add --transport sse testserver https://server.com/sse
+claude mcp list  # Check if status shows "connected"
+
+# If SSE fails, test HTTP (if advertised)
+claude mcp remove testserver
+claude mcp add --transport http testserver https://server.com
+claude mcp list
+```
+
+#### Method 4: Check Claude Code Logs
+
+View MCP connection logs:
+```bash
+# In VS Code terminal or Claude CLI
+# Errors like "connection refused" or "404" indicate unsupported transport
+# Success: Server appears in `claude mcp list` with "connected" status
+```
+
+#### Transport Status as of October 27, 2025
+
+| Server | SSE | HTTP | stdio (mcp-remote) | Notes |
+|--------|-----|------|-------------------|-------|
+| **Context7** | ✅ Yes | ❌ No | ✅ Yes | SSE: `/sse` endpoint, stdio: use `mcp-remote` |
+| **Cloudflare Docs** | ✅ Yes | ❌ No | ✅ Yes | SSE: `/sse` endpoint, stdio: use `mcp-remote` |
+| **Chrome DevTools** | ❌ No | ❌ No | ✅ Yes | Local stdio only: `npx chrome-devtools-mcp@latest` |
+
+**Note**: While the MCP specification calls the transport "Streamable HTTP", the JSON configuration still uses `"type": "sse"`. Do not confuse this with `"type": "http"` which is a different (future) transport method.
+
 ### Common MCP Servers
 
-#### Context7 (Streamable HTTP) - Library Documentation
+#### Context7 - Library Documentation
 
-Provides Claude with access to official documentation for 1000+ libraries.
+> **Transport Status (Oct 27, 2025)**: Context7 supports two methods:
+> 1. **SSE transport** (public, no auth): `https://mcp.context7.com/sse`
+> 2. **stdio with mcp-remote** (OAuth secured): `https://mcp.context7.com/mcp`
+
+**Method 1: SSE Transport (Simple)**
 
 ```bash
 # Add via CLI
@@ -5370,11 +5441,44 @@ claude mcp add --transport sse context7 https://mcp.context7.com/sse
 }
 ```
 
-**Supported libraries**: Next.js, React, MongoDB, Supabase, Vercel, and more.
+**Method 2: mcp-remote (OAuth Secured, Recommended)**
 
-#### Cloudflare Docs (Streamable HTTP) - Cloudflare Product Documentation
+Provides access to 1000+ library documentation sources with OAuth authentication.
 
 ```bash
+# Add via CLI
+claude mcp add --transport stdio context7 -- npx mcp-remote https://mcp.context7.com/mcp
+
+# Or in mcp.json
+{
+  "mcpServers": {
+    "context7": {
+      "command": "npx",
+      "args": ["mcp-remote", "https://mcp.context7.com/mcp"],
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  }
+}
+```
+
+**First use**: Opens browser for OAuth authentication. Subsequent uses are automatic.
+
+**Testing both methods**: Use `.devcontainer/switch-mcp.sh` script to compare SSE vs mcp-remote.
+
+**Supported libraries**: Next.js, React, MongoDB, Supabase, Vercel, and more.
+
+#### Cloudflare Docs - Cloudflare Product Documentation
+
+> **Transport Status (Oct 27, 2025)**: Cloudflare Docs supports two methods:
+> 1. **SSE transport** (public, no auth): `https://docs.mcp.cloudflare.com/sse`
+> 2. **stdio with mcp-remote** (OAuth secured): `https://docs.mcp.cloudflare.com/mcp`
+
+**Method 1: SSE Transport (Simple)**
+
+```bash
+# Add via CLI
 claude mcp add --transport sse cf-docs https://docs.mcp.cloudflare.com/sse
 
 # Or in mcp.json
@@ -5390,7 +5494,35 @@ claude mcp add --transport sse cf-docs https://docs.mcp.cloudflare.com/sse
 }
 ```
 
+**Method 2: mcp-remote (OAuth Secured, Recommended)**
+
+Provides `search_cloudflare_documentation` tool with OAuth authentication.
+
+```bash
+# Install mcp-remote wrapper
+npm install -g mcp-remote
+
+# Add to mcp.json (cannot use CLI for this syntax)
+{
+  "mcpServers": {
+    "cf-docs": {
+      "command": "npx",
+      "args": ["mcp-remote", "https://docs.mcp.cloudflare.com/mcp"],
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  }
+}
+```
+
+**First use**: Opens browser for OAuth authentication. Subsequent uses are automatic.
+
+**Testing both methods**: Use `.devcontainer/switch-mcp.sh` script to compare SSE vs mcp-remote.
+
 **Covers**: Workers, Pages, R2, D1, KV, Durable Objects, Queues, etc.
+
+**See**: https://developers.cloudflare.com/agents/model-context-protocol/mcp-servers-for-cloudflare/
 
 #### Chrome DevTools (stdio) - Browser Automation
 
@@ -5652,60 +5784,214 @@ npx chrome-devtools-mcp@latest --help
 
 Restrict container network access to only trusted domains, preventing credential exfiltration.
 
-**Create `.devcontainer/init-firewall.sh`**:
+#### IPv6 Bypass Prevention
+
+**Critical Security Issue**: Firewall rules using iptables only filter IPv4 traffic. If IPv6 is enabled, connections can bypass your allowlist entirely.
+
+**The Problem**:
+```bash
+# Your iptables rules block this:
+curl https://malicious-site.com  # ❌ Blocked (IPv4)
+
+# But IPv6 goes around the firewall:
+curl -6 https://malicious-site.com  # ✅ Allowed! (IPv6 bypass)
+```
+
+**Solution**: Disable IPv6 completely at the kernel level before configuring firewall rules.
+
+```bash
+# At start of init-firewall.sh (BEFORE any iptables commands)
+sysctl -w net.ipv6.conf.all.disable_ipv6=1 >/dev/null 2>&1 || true
+sysctl -w net.ipv6.conf.default.disable_ipv6=1 >/dev/null 2>&1 || true
+sysctl -w net.ipv6.conf.lo.disable_ipv6=1 >/dev/null 2>&1 || true
+```
+
+**Verification**:
+```bash
+# Verify IPv6 is disabled
+sysctl net.ipv6.conf.all.disable_ipv6  # Should show: = 1
+
+# Test IPv6 connections fail
+curl -6 https://api.github.com  # Should error: "Network is unreachable"
+```
+
+**Why This Matters**: Without IPv6 disabled, your firewall provides a false sense of security while leaving a wide-open backdoor.
+
+**Create `.devcontainer/init-firewall.sh`** (Production Implementation):
 
 ```bash
 #!/bin/bash
-set -euo pipefail
+set -euo pipefail  # Exit on error, undefined vars, pipeline failures
+IFS=$'\n\t'       # Stricter word splitting
 
-echo "Configuring network firewall..."
+# State file prevents unnecessary reconfiguration on container restart
+STATE_FILE="/var/lib/firewall-configured"
+if [ -f "$STATE_FILE" ]; then
+    echo "Firewall already configured, skipping..."
+    exit 0
+fi
 
-# Flush existing rules and create custom chain
-iptables -F OUTPUT 2>/dev/null || true
-iptables -N ALLOWED_DOMAINS 2>/dev/null || iptables -F ALLOWED_DOMAINS
+echo "Starting firewall configuration..."
 
-# Allow localhost (Docker networking, local services)
-iptables -A ALLOWED_DOMAINS -d 127.0.0.0/8 -j ACCEPT
-iptables -A ALLOWED_DOMAINS -d 172.16.0.0/12 -j ACCEPT
-iptables -A ALLOWED_DOMAINS -d 10.0.0.0/8 -j ACCEPT
+# === IPv6 SECURITY: Disable IPv6 to prevent bypass ===
+echo "Disabling IPv6..."
+sysctl -w net.ipv6.conf.all.disable_ipv6=1 >/dev/null 2>&1 || true
+sysctl -w net.ipv6.conf.default.disable_ipv6=1 >/dev/null 2>&1 || true
+sysctl -w net.ipv6.conf.lo.disable_ipv6=1 >/dev/null 2>&1 || true
 
-# Allow DNS (required for domain resolution)
-iptables -A ALLOWED_DOMAINS -p udp --dport 53 -j ACCEPT
-iptables -A ALLOWED_DOMAINS -p tcp --dport 53 -j ACCEPT
+# === Preserve Docker DNS (BEFORE flushing) ===
+DOCKER_DNS_RULES=$(iptables-save -t nat | grep "127\.0\.0\.11" || true)
+DOCKER_NETWORKS=$(ip -o -f inet addr show | grep -v "127.0.0.1" | awk '{print $4}')
 
-# Allow established connections (responses to our requests)
-iptables -A OUTPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
+# === Create ipset for efficient IP filtering ===
+ipset destroy allowed-domains 2>/dev/null || true
+ipset create allowed-domains hash:net
 
-# Whitelist Anthropic API
-iptables -A ALLOWED_DOMAINS -p tcp -d api.anthropic.com --dport 443 -j ACCEPT
+# === Fetch GitHub IP ranges (dynamic, comprehensive) ===
+echo "Fetching GitHub IP ranges..."
+gh_ranges=$(curl -s https://api.github.com/meta)
+echo "$gh_ranges" | jq -r '(.web + .api + .git)[]' | aggregate -q | while read -r cidr; do
+    echo "Adding GitHub range $cidr"
+    ipset add allowed-domains "$cidr" -exist
+done
 
-# Whitelist npm registry
-iptables -A ALLOWED_DOMAINS -p tcp -d registry.npmjs.org --dport 443 -j ACCEPT
+# === Resolve and add all trusted domains ===
+# This list includes all package registries, AI APIs, CDNs, and dev tools
+for domain in \
+    "1.1.1.1" "8.8.8.8" "8.8.4.4" \
+    "dns.google" \
+    "context7.com" \
+    "unpkg.com" "cdn.jsdelivr.net" "cdnjs.cloudflare.com" \
+    "github.com" "api.github.com" "raw.githubusercontent.com" \
+    "github.githubassets.com" "collector.github.com" \
+    "ghcr.io" "pkg-containers.githubusercontent.com" \
+    "nodejs.org" "registry.npmjs.org" \
+    "pypi.org" "files.pythonhosted.org" \
+    "astral.sh" "bun.sh" \
+    "crates.io" "static.crates.io" "index.crates.io" \
+    "docker.io" "registry-1.docker.io" "auth.docker.io" \
+    "production.cloudflare.docker.com" \
+    "api.anthropic.com" "statsig.anthropic.com" "statsig.com" "sentry.io" \
+    "api.openai.com" \
+    "aistudio.google.com" "accounts.google.com" \
+    "oauth2.googleapis.com" "www.googleapis.com" \
+    "storage.googleapis.com" "content.googleapis.com" \
+    "generativelanguage.googleapis.com" \
+    "marketplace.visualstudio.com" "vscode.blob.core.windows.net" \
+    "update.code.visualstudio.com" \
+    "docs.mcp.cloudflare.com" "mcp.context7.com" \
+    "vercel.com" "ui.shadcn.com" "tailwindcss.com" \
+    "radix-ui.com" "fonts.googleapis.com" "fonts.gstatic.com" \
+    "react.dev" "reactjs.org" "esm.sh" "lucide.dev"; do
 
-# Whitelist GitHub
-iptables -A ALLOWED_DOMAINS -p tcp -d github.com --dport 443 -j ACCEPT
-iptables -A ALLOWED_DOMAINS -p tcp -d api.github.com --dport 443 -j ACCEPT
+    # If already an IP, add directly
+    if [[ "$domain" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
+        ipset add allowed-domains "$domain" -exist
+        continue
+    fi
 
-# Whitelist MCP servers (Context7, Cloudflare)
-iptables -A ALLOWED_DOMAINS -p tcp -d mcp.context7.com --dport 443 -j ACCEPT
-iptables -A ALLOWED_DOMAINS -p tcp -d docs.mcp.cloudflare.com --dport 443 -j ACCEPT
+    # Resolve domain and add all IPs
+    echo "Resolving $domain..."
+    ips=$(dig +noall +answer A "$domain" | awk '$4 == "A" {print $5}')
+    while read -r ip; do
+        echo "Adding $ip for $domain"
+        ipset add allowed-domains "$ip" -exist
+    done < <(echo "$ips")
+done
 
-# Apply chain to all outbound traffic
-iptables -A OUTPUT -j ALLOWED_DOMAINS
+echo "IP allowlist built successfully"
 
-# Default deny for anything not explicitly allowed
+# === Flush and rebuild iptables ===
+iptables -F && iptables -X
+iptables -t nat -F && iptables -t nat -X
+iptables -t mangle -F && iptables -t mangle -X
+
+# Restore Docker DNS rules
+if [ -n "$DOCKER_DNS_RULES" ]; then
+    iptables -t nat -N DOCKER_OUTPUT 2>/dev/null || true
+    iptables -t nat -N DOCKER_POSTROUTING 2>/dev/null || true
+    echo "$DOCKER_DNS_RULES" | xargs -L 1 iptables -t nat
+fi
+
+# === Configure base rules ===
+iptables -A OUTPUT -p udp --dport 53 -j ACCEPT  # DNS
+iptables -A INPUT -p udp --sport 53 -j ACCEPT
+iptables -A OUTPUT -p tcp --dport 22 -j ACCEPT  # SSH
+iptables -A INPUT -p tcp --sport 22 -m state --state ESTABLISHED -j ACCEPT
+iptables -A INPUT -i lo -j ACCEPT   # Localhost
+iptables -A OUTPUT -o lo -j ACCEPT
+
+# === Allow Docker networks (for OTel, inter-container) ===
+while read -r network; do
+    iptables -A INPUT -s "$network" -j ACCEPT
+    iptables -A OUTPUT -d "$network" -j ACCEPT
+done < <(echo "$DOCKER_NETWORKS")
+
+# === Default DENY, then allow via ipset ===
+iptables -P INPUT DROP
+iptables -P FORWARD DROP
 iptables -P OUTPUT DROP
+iptables -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
+iptables -A OUTPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
+iptables -A OUTPUT -m set --match-set allowed-domains dst -j ACCEPT
+iptables -A OUTPUT -j REJECT --reject-with icmp-admin-prohibited
 
-echo "✓ Firewall configured (only whitelisted domains allowed)"
+echo "Firewall configuration complete!"
+
+# === Verification ===
+echo "Verifying firewall rules..."
+
+# Verify IPv6 disabled
+if sysctl net.ipv6.conf.all.disable_ipv6 | grep -q "= 1"; then
+    echo "✓ IPv6 is disabled"
+else
+    echo "❌ IPv6 still enabled - SECURITY RISK!"
+    exit 1
+fi
+
+# Verify blocked domain
+if curl --connect-timeout 5 https://example.com >/dev/null 2>&1; then
+    echo "❌ Firewall failed - can reach blocked domain"
+    exit 1
+else
+    echo "✓ Blocked domains unreachable"
+fi
+
+# Verify allowed domain
+if ! curl --connect-timeout 5 https://api.github.com/zen >/dev/null 2>&1; then
+    echo "❌ Firewall failed - can't reach allowed domain"
+    exit 1
+else
+    echo "✓ Allowed domains reachable"
+fi
+
+# Mark as configured
+touch "$STATE_FILE"
+echo "Firewall state saved"
 ```
+
+**Key Features of Production Implementation**:
+1. **IPv6 disabled first** - Prevents bypass before any rules applied
+2. **ipset for efficiency** - Much faster than individual iptables rules for 50+ domains
+3. **DNS resolution** - Dynamically resolves domains to IPs at container start
+4. **GitHub IP aggregation** - Fetches official ranges from GitHub API
+5. **Docker DNS preservation** - Maintains container networking
+6. **State file** - Skips reconfiguration on container restart
+7. **Comprehensive verification** - Tests IPv6, blocked domains, allowed domains
+8. **50+ whitelisted domains** - All package registries, AI APIs, CDNs covered
 
 **Dockerfile additions**:
 
 ```dockerfile
-# Install iptables and ipset for firewall
+# Install firewall and network tools
 RUN apt-get update && apt-get install -y \
   iptables \
   ipset \
+  iproute2 \
+  dnsutils \
+  aggregate \
+  curl \
+  jq \
   && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Copy and configure firewall script
@@ -5714,6 +6000,15 @@ RUN chmod +x /usr/local/bin/init-firewall.sh && \
   echo "node ALL=(root) NOPASSWD: /usr/local/bin/init-firewall.sh" > /etc/sudoers.d/node-firewall && \
   chmod 0440 /etc/sudoers.d/node-firewall
 ```
+
+**Required tools explained**:
+- `iptables` - IPv4 firewall rules
+- `ipset` - Efficient IP address set management
+- `iproute2` - Network configuration (`ip` command)
+- `dnsutils` - DNS resolution (`dig` command)
+- `aggregate` - IP range aggregation (GitHub IPs)
+- `curl` - HTTP requests (fetch GitHub API, verify firewall)
+- `jq` - JSON parsing (GitHub API response)
 
 **devcontainer.json additions**:
 
@@ -5730,9 +6025,17 @@ RUN chmod +x /usr/local/bin/init-firewall.sh && \
 **Testing Firewall**:
 
 ```bash
-# Inside container
-curl https://api.anthropic.com  # Should work
-curl https://example.com        # Should fail (not whitelisted)
+# Inside container - Test allowed domain
+curl https://api.anthropic.com  # ✅ Should work (whitelisted)
+
+# Test blocked domain
+curl https://example.com        # ❌ Should fail (not whitelisted)
+
+# Test IPv6 is disabled (critical security check)
+curl -6 https://api.github.com  # ❌ Should fail: "Network is unreachable"
+
+# Verify IPv6 disabled at kernel level
+sysctl net.ipv6.conf.all.disable_ipv6  # Should show: net.ipv6.conf.all.disable_ipv6 = 1
 ```
 
 ### The `--dangerously-skip-permissions` Flag
@@ -5844,7 +6147,7 @@ sudo: If sudo is running in a container, you may need to adjust the container co
   - `--cap-drop=ALL` (drop all capabilities)
   - Only add necessary capabilities (`NET_ADMIN`, `NET_RAW`)
   - Non-root user (`remoteUser: "node"`)
-  - Network firewall with whitelist
+  - Network firewall with whitelist (IPv4 + IPv6 disabled)
   - Limited sudoers file (specific scripts only)
 - The `no-new-privileges` flag is defensive overkill that breaks necessary functionality
 
