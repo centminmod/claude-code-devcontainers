@@ -2,7 +2,6 @@
 
 **Version**: Draft 5
 **Last Updated**: 2025-10-26
-**What's New in Draft 5**: AI Assistant Quick Commands, Migration Guides (Node.js, Python, Docker Compose, Team Adoption), Remote Development Platforms (Codespaces, Gitpod, Remote SSH, JetBrains), Configuration Decision Trees, Enhanced Citations
 
 > **AI Assistant Guidance**: This document provides comprehensive instructions for creating, configuring, and managing VS Code development containers optimized for Claude Code and other AI coding assistants. Use this as a complete reference when helping users set up devcontainer environments.
 
