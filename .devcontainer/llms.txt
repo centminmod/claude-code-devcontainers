@@ -2,6 +2,8 @@
 
 > **AI Assistant Guidance**: This document provides comprehensive instructions for creating, configuring, and managing VS Code development containers optimized for Claude Code and other AI coding assistants. Use this as a complete reference when helping users set up devcontainer environments.
 
+> **Version Context**: Version numbers, software references, and technical specifications current as of October 2025.
+
 > **Official Documentation**: https://docs.claude.com/en/docs/claude-code/devcontainer
 > **Specification**: https://containers.dev/implementors/spec/
 > **JSON Reference**: https://containers.dev/implementors/json_reference/
@@ -88,6 +90,7 @@ code .
 31. [DevContainer Features](#devcontainer-features)
 32. [Frequently Asked Questions](#frequently-asked-questions)
 33. [Glossary](#glossary)
+34. [Anecdotal Notes & Field Reports](#anecdotal-notes--field-reports)
 
 ---
 
@@ -190,8 +193,8 @@ Devcontainers aren't always the best solution. **Avoid devcontainers when:**
 
 1. **VS Code**: Download from https://code.visualstudio.com/
 2. **Docker Desktop**: Download from https://www.docker.com/products/docker-desktop
-   - **Mac**: Intel or Apple Silicon (M1/M2/M3) supported
-   - **Windows**: WSL2 required (see [Platform-Specific Notes](#platform-specific-notes))
+   - **Mac**: Intel or Apple Silicon (M1/M2/M3) supported, Docker Desktop 4.0+
+   - **Windows**: WSL2 required, Docker Desktop 4.0+ (see [Platform-Specific Notes](#platform-specific-notes))
    - **Linux**: Docker Engine 20.10+ (community edition fine)
 3. **Dev Containers Extension**: Install from VS Code marketplace
    - Extension ID: `ms-vscode-remote.remote-containers`
@@ -5316,7 +5319,7 @@ MCP servers provide Claude Code with access to:
 
 MCP servers use two transport mechanisms:
 
-**SSE (Server-Sent Events)** - For remote/cloud services
+**Streamable HTTP** - For remote/cloud services
 ```json
 {
   "transport": {
@@ -5328,6 +5331,7 @@ MCP servers use two transport mechanisms:
 - **Use when**: Server is hosted externally (Context7, Cloudflare Docs)
 - **Pros**: No local installation, always up-to-date
 - **Cons**: Requires internet, potential rate limits
+- **Note**: Previously called "SSE (Server-Sent Events)" before March 2025 MCP specification update
 
 **stdio (Standard Input/Output)** - For local processes
 ```json
@@ -5345,7 +5349,7 @@ MCP servers use two transport mechanisms:
 
 ### Common MCP Servers
 
-#### Context7 (SSE) - Library Documentation
+#### Context7 (Streamable HTTP) - Library Documentation
 
 Provides Claude with access to official documentation for 1000+ libraries.
 
@@ -5368,7 +5372,7 @@ claude mcp add --transport sse context7 https://mcp.context7.com/sse
 
 **Supported libraries**: Next.js, React, MongoDB, Supabase, Vercel, and more.
 
-#### Cloudflare Docs (SSE) - Cloudflare Product Documentation
+#### Cloudflare Docs (Streamable HTTP) - Cloudflare Product Documentation
 
 ```bash
 claude mcp add --transport sse cf-docs https://docs.mcp.cloudflare.com/sse
@@ -8097,7 +8101,7 @@ redis-cli -h redis ping
 
    ## Prerequisites
    - Docker Desktop 4.25+
-   - VS Code 1.85+
+   - VS Code 1.90+
    - Dev Containers extension
 
    ## First Time Setup
@@ -8970,6 +8974,431 @@ claude --verbose
 **WSL2 (Windows Subsystem for Linux 2)**: Linux kernel running on Windows. Required for Docker Desktop on Windows.
 
 **ZSH (Z Shell)**: Advanced shell with better autocomplete and themes than Bash.
+
+---
+
+## Anecdotal Notes & Field Reports
+
+> **Community Wisdom**: Real-world issues, gotchas, and solutions discovered by practitioners. This section documents practical knowledge from the field, complete with source citations for verification.
+
+### Claude Code Specific Issues
+
+**MCP stdio Connection Limitations Across Containers**
+- When Claude Code runs inside a container, it cannot establish stdio connections to MCP servers running in other containers or on the host - this is a fundamental limitation of how process-to-process stdio communication works across container boundaries
+- Use Streamable HTTP transport instead for cross-container MCP server communication
+- **Source**: [Building a Secure AI Development Environment - Medium](https://medium.com/@brett_4870/building-a-secure-ai-development-environment-containerized-claude-code-mcp-integration-e2129fe3af5a)
+
+**IDE Diagnostics Availability When Containerized**
+- Claude's IDE integration features don't work out of the box when running inside a devcontainer, meaning you lose easy access to IDE diagnostics, the ability to see currently open files, and selected line ranges
+- Claude operates purely through the terminal interface in this setup
+- **Source**: [Switching to Claude Code + VSCode inside Docker](https://timsh.org/claude-inside-docker/)
+
+**Credential Security with --dangerously-skip-permissions**
+- When executed with `--dangerously-skip-permissions`, devcontainers do not prevent malicious projects from exfiltrating anything accessible in the devcontainer including Claude Code credentials
+- Only use this flag in trusted environments you control
+- **Source**: [From Clicking Yes to Letting Claude Run Wild (Safely)](https://blog.herlein.com/post/claude-code/)
+
+**Volume Mounting Strategies for .claude Folder**
+- You can mount your local `.claude` folder into your dev container so Claude can keep and reuse its memory using a bind mount in devcontainer.json
+- This preserves Claude's context and configuration across container rebuilds
+- **Source**: [Running Claude Code inside dev containers - DEV Community](https://dev.to/sbotto/running-claude-code-inside-your-dev-containers-36e7)
+
+**Network Isolation Recommendations**
+- Claude Code is given full control of the host's network stack if you run the container with `--network=host` - never use this flag
+- Use Docker's default bridge network instead for proper isolation
+- **Source**: [Running Claude Code Safely in Devcontainers](https://www.solberg.is/claude-devcontainer)
+
+**Complete Environment Fidelity**
+- Containerized Claude Code ensures complete environment fidelity - Claude experiences the exact same Python interpreter, installed packages, environment variables, and tool versions that your code will use in development and production
+- This eliminates "it works on my machine but not in production" issues
+- **Source**: [Building a Secure AI Development Environment - Medium](https://medium.com/@brett_4870/building-a-secure-ai-development-environment-containerized-claude-code-mcp-integration-e2129fe3af5a)
+
+**Anthropic's Preconfigured Containerized Option**
+- Anthropic provides running Claude Code inside the development container as a preconfigured option for improved security and isolation, recommended for trusted repositories
+- This approach ensures Claude experiences the exact same environment as your code, eliminating environment-related issues
+- **Source**: [Development containers - Claude Docs](https://docs.claude.com/en/docs/claude-code/devcontainer)
+
+---
+
+### Performance Optimization
+
+**macOS VirtioFS Performance Improvements (2025 Data)**
+- VirtioFS performance has improved significantly - bind mounts are now only 3x slower than native operations instead of the 5-6x slowdown from two years ago
+- Docker Desktop 4.6 (March 2022) introduced VirtioFS with up to **98% performance improvements**: 90% faster MySQL imports, 87% faster composer install, 80% faster app boot times
+- Docker's **file synchronization feature** (paid subscription, 2025) provides an additional 59% performance improvement over standard VirtioFS
+- Docker Desktop 4.33 introduced further VirtioFS fine-tuning including increased directory cache timeout and optimized host change notifications
+- **Sources**:
+  - [Docker on MacOS is still slow? - Paolo Mainardi](https://www.paolomainardi.com/posts/docker-performance-macos-2025/)
+  - [Speed boost achievement unlocked on Docker Desktop 4.6 for Mac](https://www.docker.com/blog/speed-boost-achievement-unlocked-on-docker-desktop-4-6-for-mac/)
+  - [What Are the Latest Docker Desktop Performance Optimizations](https://www.docker.com/blog/what-are-the-latest-docker-desktop-enterprise-grade-performance-optimizations/)
+
+**WSL2 Filesystem Location is Critical**
+- When files are on your Windows drive (`/mnt/c/Users/<yourusername>/repos`), Docker has to rely on less efficient network protocols, slowing things down significantly
+- `/mnt/c` is actually a mountpoint exposing Windows files through a Plan9 file share, which creates a major bottleneck
+- Moving files from `/mnt/c` to the WSL filesystem can result in dramatic performance improvements for page loads and Docker operations
+- **Solution**: Keep project files in the WSL filesystem (e.g., `/home/<yourusername>/repos`)
+- **Source**: [Containers and the WSL2 File System - Ken Muse](https://www.kenmuse.com/blog/containers-and-wsl2-filesystem/)
+
+**Docker Layer Caching Strategies**
+- When building with Docker, a layer is reused from the build cache if the instruction and the files it depends on haven't changed since it was previously built
+- Order instructions strategically: expensive steps near the beginning, frequently changing steps near the end
+- Separate dependency installation (package.json, requirements.txt) from source code copying to maximize cache hits
+- **Sources**:
+  - [Optimize cache usage in builds - Docker Docs](https://docs.docker.com/build/cache/optimize/)
+  - [Docker Layer Caching Explained - The Nanjay Blog](https://blog.thenanjay.com/docker-layer-caching-explained-tips-to-improve-build-times)
+
+**.dockerignore Impact on Build Speed**
+- When `node_modules` contains hundreds of megabytes, it significantly slows down the build process
+- By adding `node_modules` to `.dockerignore`, you reduce the size of the build context drastically, speeding up the build
+- Without `node_modules` in `.dockerignore`, the docker build process slows down due to unnecessary copying and the image becomes larger
+- **Sources**:
+  - [Mastering the .dockerignore File - Medium](https://medium.com/@bounouh.fedi/mastering-the-dockerignore-file-boosting-docker-build-efficiency-398719f4a0e1)
+  - [Effective .dockerignore Patterns - Support Tools](https://support.tools/effective-dockerignore-patterns/)
+
+**Named Volumes vs Bind Mounts for Dependencies**
+- Mount the `node_modules` sub-folder into a named local volume instead of using bind mounts to significantly improve performance on macOS and Windows
+- Use `workspaceMount` property in devcontainer.json to tell VS Code where to bind your source code
+- **Sources**:
+  - [Improve disk performance - VS Code Docs](https://code.visualstudio.com/remote/advancedcontainers/improve-performance)
+  - [Dev Containers Tips and Tricks - VS Code Docs](https://code.visualstudio.com/docs/devcontainers/tips-and-tricks)
+
+**Multi-Stage Builds for Dependency Caching**
+- Multi-stage builds can separate dependency installation into its own stage, which can be cached and reused even when the source code changes
+- This prevents re-downloading dependencies on every source code change
+- **Source**: [Docker Layer Caching Reference](https://dockerbuild.com/reference/layer-caching)
+
+**BuildKit Parallelization**
+- BuildKit supports layer reuse across environments, parallel builds, and external caching – all of which make CI/CD pipelines faster and cheaper
+- Enable BuildKit with `DOCKER_BUILDKIT=1` environment variable
+- **Source**: [Docker Layer Caching: Speed Up CI/CD Builds - Bunnyshell](https://www.bunnyshell.com/blog/docker-layer-caching-speed-up-cicd-builds/)
+
+**Feature Caching Management**
+- Manage your own resource cache as part of the Feature to improve performance during container initialization
+- Each feature may have an initial build+attach cost per associated Codespace, but subsequent rebuilds will use the cache
+- **Source**: [Improving Dev Container Feature Performance - Ken Muse](https://www.kenmuse.com/blog/improving-dev-container-feature-performance/)
+
+**Resource Allocation Optimization**
+- Go to Docker Desktop → Settings → Advanced to increase CPU, Memory, or Swap
+- You can use `runArgs` in devcontainer.json with Docker run CLI options to configure container resources
+- **Source**: [How Do I Increase the CPU & RAM in a VSCode DevContainer - Stack Overflow](https://stackoverflow.com/questions/71773785/how-do-i-increase-the-cpu-ram-in-a-vscode-devcontainer)
+
+**Clone Repository in Container Volume**
+- You can clone your entire source tree inside of a named volume rather than locally, which can significantly improve performance on macOS and Windows
+- This avoids cross-OS filesystem penalties
+- **Source**: [Improve disk performance - VS Code Docs](https://code.visualstudio.com/remote/advancedcontainers/improve-performance)
+
+---
+
+### Security Best Practices
+
+**Non-Root User Importance and Implementation**
+- Docker containers typically run with root privileges by default, which is useful for development but can expose you to high risk in production environments
+- Running containers as the root user may provide a path for privilege escalation, allowing attackers to gain control of the underlying host system
+- **Solution**: Specify a non-root user in the Dockerfile using `RUN addgroup -S appgroup && adduser -S appuser -G appgroup` followed by `USER appuser`
+- **Sources**:
+  - [Container Security Best Practices: Avoid Running Containers as Root - Medium](https://medium.com/@amandubey_6607/container-security-best-practices-avoid-running-containers-as-root-ae37fee2846f)
+  - [Securing Docker: Non-Root User Best Practices - Medium](https://medium.com/@Kfir-G/securing-docker-non-root-user-best-practices-5784ac25e755)
+
+**Linux Capabilities Management**
+- Docker containers should only have the minimum set of capabilities required for their functionality
+- Drop unnecessary Linux capabilities using `docker run --cap-drop=ALL --cap-add=NET_ADMIN`
+- By default, Docker containers inherit a set of capabilities from the host; to enhance security, drop all default capabilities explicitly and add only required ones
+- **Source**: [Docker Security Best Practices - DEV Community](https://dev.to/ajeetraina/docker-security-best-practices-safeguarding-containers-with-privileges-capabilities-and-resource-management-2dk1)
+
+**Workspace Trust Feature Implications**
+- The Workspace Trust feature lets you decide whether code in your project folder can be executed by VS Code and extensions without your explicit approval
+- Some workflows such as connecting to GitHub Codespace or attaching to a running Docker container are automatically trusted
+- **Important**: Workspace Trust can't prevent a malicious extension from executing code and ignoring Restricted Mode
+- **Sources**:
+  - [Workspace Trust - VS Code Docs](https://code.visualstudio.com/docs/editing/workspaces/workspace-trust)
+  - [Dev Containers - VS Code Docs](https://code.visualstudio.com/docs/devcontainers/containers)
+
+**Read-Only Volume Mounts**
+- Use read-only mounts for SSH keys and other sensitive files: `source=${localEnv:HOME}/.ssh,target=/home/node/.ssh,type=bind,readonly`
+- This prevents accidental or malicious modification of host files from the container
+- **Source**: [Best Practices for Secure Docker Containerization - Medium](https://medium.com/@maheshwar.ramkrushna/best-practices-for-secure-docker-containerization-non-root-user-read-only-volumes-and-resource-d34ed09b1bd3)
+
+**--security-opt=no-new-privileges**
+- Use `docker run --security-opt=no-new-privileges` to create a container where processes cannot gain new privileges beyond those they start with
+- Prevents privilege escalation attacks
+- **Source**: [Docker Security Best Practices - DEV Community](https://dev.to/574n13y/implementing-security-best-practices-in-docker-containers-32oe)
+
+**Capability Dropping Patterns**
+- Control things like whether to run as a non-root user, prevent privilege escalation (`allowPrivilegeEscalation: false`), and drop unnecessary kernel capabilities
+- Follow best practices from OWASP and the CIS Docker Benchmark
+- **Source**: [Docker & Kubernetes Container Security Explained - Aikido](https://www.aikido.dev/blog/docker-kubernetes-container-security)
+
+**Container Escape Risk Mitigation**
+- Although dev containers, codespaces, and VMs provide a level of isolation from the host system, they should not be considered a hard security boundary
+- For enhanced security, run agent mode operations in isolated environments like dev containers, GitHub Codespaces, or virtual machines to limit potential impact
+- **Source**: [Workspace Trust - VS Code Docs](https://code.visualstudio.com/docs/editing/workspaces/workspace-trust)
+
+---
+
+### Platform-Specific Gotchas
+
+**Docker Desktop File Sharing Configuration**
+- If you open a dev container from a non-shared location, the container will successfully start but the workspace will be empty
+- **Solution**: Go to Docker Desktop → Resources → File Sharing and check the drive(s) where your source code is located
+- **Source**: [Dev Containers Tips and Tricks - VS Code Docs](https://code.visualstudio.com/docs/devcontainers/tips-and-tricks)
+
+**macOS VirtioFS and Alternative Solutions**
+- Docker Desktop 4.6+ with VirtioFS (free) provides up to 98% performance improvements for file operations
+- Docker's **file synchronization feature** (paid subscription) offers an additional 59% improvement over standard VirtioFS
+- **Alternative solutions**: Lima (open-source, excellent performance), OrbStack (strong performance), or hybrid approach (combining bind mounts with volumes for stable performance)
+- **Sources**:
+  - [Docker on MacOS is still slow? - Paolo Mainardi](https://www.paolomainardi.com/posts/docker-performance-macos-2025/)
+  - [Docker Desktop for Mac is no longer slow - Collabnix](https://collabnix.com/docker-desktop-for-mac-is-no-longer-slow-and-how-docker-team-fixed-it/)
+
+**Windows /mnt/c Performance Penalty**
+- When using `/mnt/c` for Docker volumes, significant performance degradation occurs due to the Plan9 file share protocol
+- Moving files from Windows filesystem (`/mnt/c`) to WSL filesystem can result in dramatically faster page load times and build performance
+- **Best practice**: Keep project files in the WSL filesystem (e.g., `/home/<yourusername>/repos`) for optimal Docker performance
+- **Source**: [Containers and the WSL2 File System - Ken Muse](https://www.kenmuse.com/blog/containers-and-wsl2-filesystem/)
+
+**Windows WSL2 Optimal Filesystem Location**
+- When your code lives within the WSL filesystem (e.g., `/home/<yourusername>/repos`), Docker can use highly efficient bind mounts
+- Open from WSL terminal using `code .` - the command will launch VS Code on your Windows desktop, but it will automatically connect to the WSL environment
+- Access WSL files from Windows using `\\wsl$\` or `\\wsl.localhost\` paths when needed
+- **Source**: [Containers and the WSL2 File System - Ken Muse](https://www.kenmuse.com/blog/containers-and-wsl2-filesystem/)
+
+**Alpine Linux glibc Compatibility Issues**
+- Alpine uses musl libc, while most other linux distributions rely on glibc, making some programs compiled on one incompatible with the other
+- When using Alpine Linux containers, some extensions may not work due to glibc dependencies in native code inside the extension
+- The Dev Container extension downloads a glibc-based node binary, which will not run on the Alpine vscode tunnel host
+- **Solutions**: Install `gcompat` compatibility layer (`apk add --no-cache gcompat libstdc++`), or compile with musl instead
+- **Warning**: Installing the glibc compatibility package will get most glibc-compiled binaries to run, but some will still not work - unreliable for production
+- **Sources**:
+  - [Remote Development with Linux - VS Code Docs](https://code.visualstudio.com/docs/remote/linux)
+  - [Running glibc programs - Alpine Linux Wiki](https://wiki.alpinelinux.org/wiki/Running_glibc_programs)
+  - [Moving away from Alpine - DEV Community](https://dev.to/asyazwan/moving-away-from-alpine-30n4)
+
+**Extension Native Code Dependencies**
+- Some extensions rely on libraries not found in specific Docker images - for example, Visual Studio Live Share requires the installation of system-level dependencies
+- Extensions with native code may fail on Alpine or minimal base images
+- **Source**: [Dev Containers Tips and Tricks - VS Code Docs](https://code.visualstudio.com/docs/devcontainers/tips-and-tricks)
+
+**Docker-in-Docker Storage Driver Issues**
+- VS Code devcontainers that run Docker inside of host Docker can cause the host Docker to run out of disk space after a few hours of working
+- This frequently happens when `/var/lib/docker` is inside the container and not a volume, as the container filesystem will often be overlay
+- It's not possible to define an overlay filesystem inside of an overlay filesystem
+- **Solutions**: Mount a volume for `/var/lib/docker` and make sure the source for that mount is a supported backing filesystem
+- **Source**: [Why is docker-in-docker using so much disk space? - Super User](https://superuser.com/questions/1836377/why-is-docker-in-docker-using-so-much-disk-space)
+
+**VFS Fallback Layer Explosion**
+- The fallback when a layered filesystem driver is not available is to use the "native" or "vfs" driver, which is just a copy of the entire filesystem for each layer
+- This means a 100MB image with a single 1MB file added results in 201MB of storage
+- **Source**: [Why is docker-in-docker using so much disk space? - Super User](https://superuser.com/questions/1836377/why-is-docker-in-docker-using-so-much-disk-space)
+
+**Platform-Specific docker system prune**
+- Docker provides ways to control how much memory, or CPU a container can use, setting runtime configuration flags of the docker run command
+- `docker system prune --volumes` removes all stopped containers, networks not used by containers, unused volumes, dangling images, and build cache, freeing up disk space
+- **Source**: [Docker runs out of disk space - GitHub Issue](https://github.com/moby/moby/issues/18869)
+
+---
+
+### Git & SSH Credential Handling
+
+**SSH Key Passphrase Hang Issues**
+- If you clone a Git repository using SSH and your SSH key has a passphrase, VS Code's pull and sync features may hang when running remotely
+- **Workarounds**: Either use an SSH key without a passphrase, clone using HTTPS, or run git push from the command line
+- **Source**: [Dev Containers Tips and Tricks - VS Code Docs](https://code.visualstudio.com/docs/devcontainers/tips-and-tricks)
+
+**SSH Agent Forwarding Setup**
+- You just need to run `ssh-add` on your host - Docker mounts the SSH socket from your host to the Devcontainer, allowing you to make authentication requests from inside your Devcontainer
+- Make sure the ssh agent is up on your host, by running `eval "$(ssh-agent -s)"`
+- The Dev Containers extension provides out of the box support for using local Git credentials from inside a container
+- **Sources**:
+  - [DevContainer with host Git credentials - Marc Andreu](https://marcandreuf.com/blog/2024-07-12-gitdevcont/)
+  - [Sharing Git credentials with your container - VS Code Docs](https://code.visualstudio.com/remote/advancedcontainers/sharing-git-credentials)
+
+**Docker Email vs Docker ID Login**
+- Docker login issues can occur when using your email instead of Docker ID - the Docker CLI only supports using your Docker ID
+- Use your Docker ID, not your email address
+- **Source**: [Dev Containers Tips and Tricks - VS Code Docs](https://code.visualstudio.com/docs/devcontainers/tips-and-tricks)
+
+**.ssh Folder Permission Requirements**
+- The error "Bad owner or permissions on /home/vscode/.ssh/config" can be resolved by setting proper permissions
+- **Solution**: `chmod 700` for `.ssh` directory and `chmod 600` for files inside
+- **Source**: [git push fails in DevContainer - GitHub Issue](https://github.com/csci430-os/vscode-remote-devcontainer/issues/2)
+
+**Git Credential Helper Configuration**
+- Only commands that need to push or pull the remote origin (GitHub) will fail in the DevContainer
+- Alternative approach: do the clone and push on the local host
+- **Source**: [Cannot use SSH credentials inside the dev container - GitHub Issue](https://github.com/loft-sh/devpod/issues/1291)
+
+---
+
+### Docker Resource Management
+
+**Disk Space Consumption Patterns**
+- Docker devours disk space through images, containers, volumes, and build cache, and can be quite the disk space hog if left unchecked due to the accumulation of Docker artifacts over time
+- One common issue is the "no space left on device" error when pulling images or running containers
+- **Source**: [A Guide to Disk Space Management with Docker - Blacksmith](https://www.blacksmith.sh/blog/a-guide-to-disk-space-management-with-docker-how-to-clear-your-cache)
+
+**docker system df Diagnostic Commands**
+- Tools like `docker system df` can give you an overview of Docker's disk usage
+- `docker system df -v` outputs the actual disk space used by a container
+- **Source**: [Do Docker containers take up space? - DevOps Stack Exchange](https://devops.stackexchange.com/questions/12954/do-docker-containers-take-up-space)
+
+**docker system prune Cleanup Strategies**
+- Fight back with `docker system prune` and prevent future bloat through `.dockerignore` files, specific image tags, and regular cleanup habits
+- `docker system prune --volumes` removes all stopped containers, networks not used by containers, unused volumes, dangling images, and build cache, freeing up disk space
+- **Source**: [A Guide to Disk Space Management with Docker - Blacksmith](https://www.blacksmith.sh/blog/a-guide-to-disk-space-management-with-docker-how-to-clear-your-cache)
+
+**Memory Limit Configuration**
+- Docker provides ways to control how much memory, or CPU a container can use, setting runtime configuration flags of the docker run command
+- Hard limits let the container use no more than a fixed amount of memory, while soft limits let the container use as much memory as it needs unless certain conditions are met
+- **Source**: [Resource constraints - Docker Docs](https://docs.docker.com/engine/containers/resource_constraints/)
+
+**Build Cache Management**
+- Each prebuild that's created consumes storage space that will either incur a billable charge or use some of your monthly included storage
+- Multi-stage builds can help reduce the size of your final image
+- **Source**: [Configuring prebuilds - GitHub Docs](https://docs.github.com/en/codespaces/prebuilding-your-codespaces/configuring-prebuilds)
+
+**Volume Mounting for /var/lib/docker**
+- The fix for Docker-in-Docker disk issues is to mount a volume for `/var/lib/docker` and make sure the source for that mount is a supported backing filesystem
+- **Source**: [Why is docker-in-docker using so much disk space? - Super User](https://superuser.com/questions/1836377/why-is-docker-in-docker-using-so-much-disk-space)
+
+---
+
+### MCP Server Integration
+
+**Container-to-Container stdio Limitations**
+- When Claude Code runs inside a container, it cannot establish stdio connections to MCP servers running in other containers or on the host
+- This is a fundamental limitation of how process-to-process stdio communication works across container boundaries
+- **Workaround**: Use Streamable HTTP transport instead, or run MCP servers in the same container as Claude Code
+- **Source**: [Building a Secure AI Development Environment - Medium](https://medium.com/@brett_4870/building-a-secure-ai-development-environment-containerized-claude-code-mcp-integration-e2129fe3af5a)
+
+**Streamable HTTP vs stdio Transport Selection**
+- MCP servers can be configured in Dev Containers through the devcontainer.json file
+- Streamable HTTP transport works across container boundaries, while stdio requires same-container execution
+- **Sources**:
+  - [Use MCP servers in VS Code - VS Code Docs](https://code.visualstudio.com/docs/copilot/customization/mcp-servers)
+  - [Add MCP Servers to Claude Code - MCPcat](https://mcpcat.io/guides/adding-an-mcp-server-to-claude-code/)
+
+**mcp.json Auto-Population in Codespaces**
+- When the Dev Container is created, VS Code automatically writes the MCP server configurations to the remote mcp.json file, making them available in your containerized development environment
+- **Source**: [Use MCP servers in VS Code - VS Code Docs](https://code.visualstudio.com/docs/copilot/customization/mcp-servers)
+
+**MCP Proxy Utility Patterns**
+- One solution combines VS Code development containers for environment consistency and security isolation, Claude Code running inside the development container, and a self-hosted MCP server for GitHub integration using a general MCP proxy utility
+- **Source**: [Building a Secure AI Development Environment - Medium](https://medium.com/@brett_4870/building-a-secure-ai-development-environment-containerized-claude-code-mcp-integration-e2129fe3af5a)
+
+---
+
+### Lifecycle Hook Behavior
+
+**postCreateCommand Background Execution Default**
+- By default, postCreateCommand is executed in the background after reporting the successful creation of the development environment
+- This means that the container is considered ready and the IDE can connect even while the postCreateCommand is still running
+- **Source**: [spec/devcontainer-reference.md - GitHub](https://github.com/devcontainers/spec/blob/main/docs/specs/devcontainer-reference.md)
+
+**waitFor Property Blocking Behavior**
+- If the `waitFor` property is defined, then execution should block until all commands in the sequence up to the specified property have executed
+- This property defaults to `updateContentCommand`
+- **Source**: [spec/devcontainer-reference.md - GitHub](https://github.com/devcontainers/spec/blob/main/docs/specs/devcontainer-reference.md)
+
+**Codespaces vs Local Execution Differences**
+- Users expected "all three of onCreateCommand, updateContentCommand, and postCreateCommand will be completed before I am able to connect to the Codespace"
+- Instead, users are "connected to the Codespace while onCreateCommand is still running"
+- When using VS Code Remote Containers locally, users are "presented with a 'Configuring...' Terminal that displays the progress of these commands before connecting"
+- This suggests the `waitFor` property's blocking behavior may work differently between local VS Code Remote Containers and GitHub Codespaces
+- **Source**: [waitFor devcontainer.json key not working - GitHub Discussion](https://github.com/orgs/community/discussions/9644)
+
+**Parallel Execution with Object Syntax**
+- postCreateCommand, postStartCommand, postAttachCommand, and initializeCommand all support object types to allow for parallel execution
+- All lifecycle scripts have been extended to support object types where you can run multiple commands in parallel
+- **Source**: [Life Cycle in .devcontainer - Project Asuras](https://blog.projectasuras.com/DevContainers/3)
+
+**onCreateCommand vs postCreateCommand Timing**
+- onCreateCommand runs after container creation, before user assignment (no access to user secrets or assets)
+- postCreateCommand runs after container assigned to user for first time (has access to user secrets, assets, and permissions)
+- Use onCreateCommand for system-level setup, postCreateCommand for user-specific configuration
+- **Source**: [Dev Container metadata reference](https://containers.dev/implementors/json_reference/)
+
+---
+
+### Extension Compatibility
+
+**Visual Studio Live Share System Dependencies**
+- Some extensions rely on libraries not found in specific Docker images - for example, Visual Studio Live Share requires the installation of system-level dependencies
+- **Solution**: Install required system libraries in your Dockerfile
+- **Source**: [Dev Containers Tips and Tricks - VS Code Docs](https://code.visualstudio.com/docs/devcontainers/tips-and-tricks)
+
+**Alpine Linux glibc Extension Failures**
+- When using Alpine Linux containers, some extensions may not work due to glibc dependencies in native code inside the extension
+- Alpine uses musl libc instead of glibc, causing incompatibility
+- **Source**: [Remote Development with Linux - VS Code Docs](https://code.visualstudio.com/docs/remote/linux)
+
+**Native Code Library Requirements**
+- For Alpine Linux, included native code or runtimes may not work due to fundamental differences between how libc is implemented in Alpine Linux (musl) and other distributions (glibc)
+- **Solution**: Use Debian/Ubuntu-based images for maximum extension compatibility, or install gcompat on Alpine
+- **Source**: [Remote Development with Linux - VS Code Docs](https://code.visualstudio.com/docs/remote/linux)
+
+**gcompat Compatibility Layer Solution**
+- gcompat is a library which provides glibc-compatible APIs for use on musl libc systems like Alpine Linux
+- Install with `apk add --no-cache gcompat libstdc++`
+- **Warning**: This is unreliable and not suited for production environments - some glibc binaries will still not work
+- **Sources**:
+  - [Running glibc programs - Alpine Linux Wiki](https://wiki.alpinelinux.org/wiki/Running_glibc_programs)
+  - [Is there a best practice on setting up glibc on Alpine - Stack Overflow](https://stackoverflow.com/questions/37818831/is-there-a-best-practice-on-setting-up-glibc-on-docker-alpine-linux-base-image)
+
+---
+
+### GitHub Codespaces Specific
+
+**Prebuild Trigger Strategy Optimization**
+- You can choose between "On configuration change" trigger which will update prebuilds only when devcontainer files change - this option uses fewer GitHub Actions minutes but won't guarantee codespaces always include recently added or updated dependencies
+- Versus the default "Every push" setting
+- **Source**: [Configuring prebuilds - GitHub Docs](https://docs.github.com/en/codespaces/prebuilding-your-codespaces/configuring-prebuilds)
+
+**onCreateCommand vs updateContentCommand Usage**
+- Use `onCreateCommand` and `updateContentCommand` commands in your devcontainer.json to include time-consuming processes as part of prebuild creation
+- `onCreateCommand` runs only once when the prebuild is created, whereas `updateContentCommand` runs at creation and at subsequent updates
+- Incremental builds should be included in `updateContentCommand` since they represent the source of your project
+- **Source**: [Configuring prebuilds - GitHub Docs](https://docs.github.com/en/codespaces/prebuilding-your-codespaces/configuring-prebuilds)
+
+**Prebuild Optimization Setting Importance**
+- Keep prebuild optimization enabled, because it helps ensure that codespaces can still be created quickly if an up-to-date prebuild is not available
+- With this optimization, as long as there is an active prebuild for a given repository, branch, and devcontainer combination, you will be able to spin up prebuilt codespaces for it, even if the latest prebuild workflow for that branch might be failing
+- **Source**: [Configuring prebuilds - GitHub Docs](https://docs.github.com/en/codespaces/prebuilding-your-codespaces/configuring-prebuilds)
+
+**Storage Cost Management**
+- Each prebuild that's created consumes storage space that will either incur a billable charge or, for repositories owned by your personal GitHub account, will use some of your monthly included storage
+- Monitor your prebuild usage to avoid unexpected costs
+- **Source**: [Configuring prebuilds - GitHub Docs](https://docs.github.com/en/codespaces/prebuilding-your-codespaces/configuring-prebuilds)
+
+**Multi-Stage Builds for Size Reduction**
+- Use multi-stage builds to reduce the size of your final image
+- Multi-stage builds allow you to create intermediate images that perform specific tasks, and then copy only the necessary files to the final image
+- Also, exclude files and directories that are not needed for building or running your application with a `.dockerignore` file
+- **Source**: [Configuring prebuilds - GitHub Docs](https://docs.github.com/en/codespaces/prebuilding-your-codespaces/configuring-prebuilds)
+
+---
+
+### Features vs Dockerfile Best Practices
+
+**When to Use Features**
+- Features allow you to install tools like Ruby and Node in a single line in devcontainer.json, versus potentially several steps in a typical Dockerfile
+- You can reuse the Dockerfile that defines your production infrastructure and then layer some Features over that, allowing it to be used for both local development and production deployments, without the risk of developer tooling leaking out
+- **Source**: [Simplifying devcontainers With Features - LINQ to Fail](https://www.aaron-powell.com/posts/2023-01-11-simplifying-devcontainers-with-features/)
+
+**When to Use Dockerfiles**
+- A Dockerfile is most suitable for installing packages and tools independent of your workspace files
+- A custom Dockerfile will benefit from Docker's build cache and result in faster rebuilds than postCreateCommand
+- This can result in a faster build process and an easy way to centralize an image
+- **Source**: [Devfile & devcontainer vs. Dockerfile & Docker-Compose - Cloudomation](https://cloudomation.com/cloudomation-blog/devfile-devcontainer-vs-dockerfile-docker-compose/)
+
+**Best Practice Recommendation**
+- Features tend to be the right solution when the Dockerfile is intended to represent the base of a dev container and a production image
+- The approach allows you to maintain a production-ready Dockerfile while layering development-specific tools through Features
+- **Source**: [Intro to Dev Container Features - Ken Muse](https://www.kenmuse.com/blog/intro-to-dev-container-features/)
+
+**Key Limitation of Dockerfiles in Devcontainers**
+- The Dockerfile runs before the dev container is created and the workspace folder is mounted and therefore does not have access to the files in the workspace folder
+- For workspace-specific setup, use lifecycle hooks instead
+- **Source**: [Create a Dev Container - VS Code Docs](https://code.visualstudio.com/docs/devcontainers/create-dev-container)
 
 ---
 
