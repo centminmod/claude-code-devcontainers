@@ -5799,6 +5799,106 @@ RUN git config --global core.excludesfile ~/.gitignore_global && \
 }
 ```
 
+### ⚠️ The `--security-opt=no-new-privileges` Incompatibility
+
+**Critical Finding** (October 2025 field testing):
+
+The `--security-opt=no-new-privileges` Docker flag **breaks sudo** in devcontainers, causing runtime initialization scripts to fail.
+
+**What it does**:
+- Prevents processes from gaining elevated privileges
+- Recommended security hardening in many Docker guides
+- Sounds like good defense-in-depth
+
+**The Problem**:
+```bash
+# In postStartCommand:
+sudo /usr/local/bin/init-firewall.sh
+
+# Error with no-new-privileges:
+sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+```
+
+**Why it breaks**:
+- Firewall configuration requires `sudo` to run `iptables` commands
+- `iptables` needs root privileges to modify network rules
+- `no-new-privileges` prevents sudo from elevating to root
+- Result: Container starts but firewall/config scripts fail with exit code 1
+
+**When you CAN'T use this flag**:
+- ❌ Any devcontainer that uses `sudo` in lifecycle hooks (postStartCommand, postCreateCommand)
+- ❌ Devcontainers with iptables firewall configuration
+- ❌ Init scripts requiring root privileges
+- ❌ Containers using `sudoers` file for specific commands
+
+**When you CAN use this flag**:
+- ✅ Devcontainers that never need sudo
+- ✅ Containers where all root operations happen at build-time (Dockerfile)
+- ✅ Simple development containers without network restrictions
+
+**Recommended Approach** (if you need both security and sudo):
+
+**Option 1: Don't use no-new-privileges** (recommended)
+- Your existing security is already strong:
+  - `--cap-drop=ALL` (drop all capabilities)
+  - Only add necessary capabilities (`NET_ADMIN`, `NET_RAW`)
+  - Non-root user (`remoteUser: "node"`)
+  - Network firewall with whitelist
+  - Limited sudoers file (specific scripts only)
+- The `no-new-privileges` flag is defensive overkill that breaks necessary functionality
+
+**Option 2: Move root operations to build-time**
+```dockerfile
+# Instead of postStartCommand with sudo:
+# Do firewall setup in Dockerfile (more complex but works with no-new-privileges)
+
+# Dockerfile
+RUN /usr/local/bin/init-firewall.sh && \
+    # Save iptables rules
+    iptables-save > /etc/iptables/rules.v4
+
+# devcontainer.json - can now use no-new-privileges
+{
+  "runArgs": ["--security-opt=no-new-privileges"],
+  "postStartCommand": "iptables-restore < /etc/iptables/rules.v4"
+}
+```
+
+**Option 3: Architectural alternative**
+- Use Docker's network isolation features instead of in-container iptables
+- Define network policies in `docker-compose.yml`
+- No sudo required, can use `no-new-privileges`
+
+**Lesson Learned**:
+Don't blindly apply every security hardening flag. Test with your actual use case. Some "best practices" from generic Docker guides don't account for devcontainer-specific requirements like lifecycle hooks that need elevated privileges.
+
+**Real-world example**:
+```json
+// ❌ BAD - Looks secure but breaks initialization
+{
+  "runArgs": [
+    "--cap-drop=ALL",
+    "--cap-add=NET_ADMIN",
+    "--security-opt=no-new-privileges"  // Breaks sudo!
+  ],
+  "postStartCommand": "sudo /usr/local/bin/init-firewall.sh"  // Fails!
+}
+
+// ✅ GOOD - Secure AND functional
+{
+  "runArgs": [
+    "--cap-drop=ALL",
+    "--cap-add=NET_ADMIN",
+    "--cap-add=NET_RAW",
+    "--cap-add=SETUID",  // Needed for sudo
+    "--cap-add=SETGID"   // Needed for sudo
+    // no-new-privileges flag removed
+  ],
+  "postStartCommand": "sudo /usr/local/bin/init-firewall.sh"  // Works!
+}
+```
+
 **Use minimal base images**:
 ```dockerfile
 FROM node:20-slim  # Instead of node:20 (500MB smaller)
@@ -6566,6 +6666,224 @@ RUN npm ci
 # Python: Use uv instead of pip
 RUN pip install uv && uv pip install -r requirements.txt
 ```
+
+**Always Upgrade npm to Latest** (October 2025 best practice):
+
+```dockerfile
+FROM node:20
+
+# IMPORTANT: Upgrade npm immediately after base image
+# Why: node:20 ships with npm 10.8.x, latest is 10.9.x+
+# Benefits: Security patches, performance improvements, bug fixes
+RUN npm install -g npm@latest
+
+# Then continue with your Dockerfile...
+```
+
+**Why this matters**:
+- Base images ship with npm version from their build date (often months old)
+- npm releases security patches frequently
+- Newer npm versions have performance optimizations
+- `apt-get update` won't upgrade npm (it's installed via Node.js, not apt)
+
+**Real-world impact**:
+```bash
+# Without npm upgrade (node:20 default):
+npm --version  # 10.8.2
+
+# With npm upgrade:
+npm --version  # 10.9.2 (latest at time of build)
+```
+
+**Performance benefit**:
+- npm 10.9+ has improved lockfile handling
+- Faster `npm install` operations
+- Better error messages for troubleshooting
+
+**Best practice location in Dockerfile**:
+```dockerfile
+FROM node:20
+
+ARG TZ
+ENV TZ="$TZ"
+
+# DO THIS EARLY (before installing other packages)
+RUN npm install -g npm@latest
+
+# Then continue with system packages
+RUN apt-get update && apt-get install -y ...
+```
+
+**Why early in Dockerfile**:
+- Ensures all subsequent npm operations use latest version
+- Prevents version inconsistencies
+- Better layer caching (npm version rarely changes)
+
+### BuildKit Cache Mounts (5-10x Faster Rebuilds)
+
+**Critical Performance Optimization** (October 2025 best practice):
+
+BuildKit cache mounts dramatically speed up Docker builds by caching package downloads between builds.
+
+**Problem with traditional builds**:
+```dockerfile
+# BAD: Redownloads packages on EVERY rebuild
+RUN apt-get update && apt-get install -y \
+    git curl wget chromium
+```
+
+**Result**: Even minor Dockerfile changes force re-downloading 500MB+ of packages
+
+**Solution: BuildKit cache mounts**:
+```dockerfile
+# GOOD: Packages cached, only download new/changed ones
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+    apt-get update && apt-get install -y \
+    git curl wget chromium
+```
+
+**Performance Impact**:
+- **First build**: ~10 minutes (downloads everything)
+- **Subsequent builds**: ~2 minutes (reuses cached packages)
+- **Speedup**: 5-10x faster rebuilds
+
+**How it works**:
+1. `--mount=type=cache` creates a persistent cache directory
+2. `target=/var/cache/apt` is where apt stores downloaded .deb files
+3. `target=/var/lib/apt/lists` is where apt stores package metadata
+4. `sharing=locked` prevents race conditions if multiple builds run concurrently
+5. Cache survives Docker layer invalidation
+
+**Complete Example**:
+
+```dockerfile
+FROM node:20
+
+# Enable BuildKit (required)
+# Set in Docker Desktop or via DOCKER_BUILDKIT=1 docker build
+
+# Upgrade npm to latest with cache
+RUN --mount=type=cache,target=/root/.npm \
+    npm install -g npm@latest
+
+# Install system packages with cache
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    curl \
+    ripgrep \
+    fd-find \
+    chromium \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Note: The "apt-get clean && rm -rf /var/lib/apt/lists/*" at the end
+# is still useful to keep the final image layer small, even though
+# the cache mount keeps the packages cached separately
+
+USER node
+
+# Cache npm packages during global installs
+RUN --mount=type=cache,target=/home/node/.npm,uid=1000 \
+    npm install -g @anthropic-ai/claude-code@latest
+```
+
+**Common Cache Locations**:
+
+| Package Manager | Cache Mount Target |
+|----------------|-------------------|
+| **apt** (Debian/Ubuntu) | `/var/cache/apt` and `/var/lib/apt/lists` |
+| **npm** | `/home/node/.npm` or `/root/.npm` |
+| **pip** | `/root/.cache/pip` |
+| **cargo** (Rust) | `/usr/local/cargo/registry` |
+| **go** | `/go/pkg/mod` |
+
+**Enabling BuildKit** (if not already enabled):
+
+```bash
+# Method 1: Environment variable (per-build)
+DOCKER_BUILDKIT=1 docker build .devcontainer
+
+# Method 2: Docker Desktop settings
+# Docker Desktop → Preferences → Docker Engine
+# Add: { "features": { "buildkit": true } }
+
+# Method 3: Daemon config (persistent)
+# /etc/docker/daemon.json
+{
+  "features": {
+    "buildkit": true
+  }
+}
+```
+
+**VS Code devcontainer.json** (uses BuildKit automatically if Docker Desktop has it enabled):
+```json
+{
+  "build": {
+    "dockerfile": "Dockerfile"
+    // BuildKit enabled by default in recent Docker Desktop versions
+  }
+}
+```
+
+**Debugging Cache Issues**:
+
+```bash
+# View BuildKit cache usage
+docker system df -v | grep buildkit
+
+# Clear BuildKit cache (if needed)
+docker builder prune
+
+# Build with cache disabled (debugging)
+DOCKER_BUILDKIT=1 docker build --no-cache .devcontainer
+```
+
+**When NOT to use cache mounts**:
+- ❌ CI/CD systems without persistent Docker layer cache (cache won't help)
+- ❌ Security-sensitive builds requiring fresh downloads every time
+- ❌ Docker versions < 18.09 (BuildKit not available)
+
+**When to ALWAYS use cache mounts**:
+- ✅ Local development with frequent rebuilds
+- ✅ Team devcontainers (everyone benefits from caching)
+- ✅ Large base images (Chromium, ML frameworks, databases)
+- ✅ Multi-stage builds (cache intermediate stages)
+
+**Combining with .dockerignore**:
+
+Cache mounts work best when combined with `.dockerignore`:
+
+```bash
+# .dockerignore - prevents invalidating cache
+node_modules/
+.git/
+.env
+*.log
+.DS_Store
+```
+
+**Real-world impact example**:
+
+```dockerfile
+# Before BuildKit cache mounts:
+# Rebuild after changing one line: 10 minutes (redownloads Chromium, build tools)
+
+# After BuildKit cache mounts:
+# Same rebuild: 2 minutes (uses cached packages)
+# Savings: 8 minutes per rebuild
+# Over 10 rebuilds per week: 80 minutes saved
+```
+
+**Best Practice Checklist**:
+- [ ] Use `--mount=type=cache` for apt/yum/apk package managers
+- [ ] Use `--mount=type=cache` for language package managers (npm, pip, cargo)
+- [ ] Set `sharing=locked` for multi-stage builds or parallel builds
+- [ ] Keep `apt-get clean` at end (doesn't affect cache, reduces layer size)
+- [ ] Use appropriate UID in cache mount if running as non-root user
+- [ ] Document BuildKit requirement in README for team members
 
 ### Network Performance
 
@@ -8312,6 +8630,196 @@ docker run -it test /bin/bash
 cd ~  # /home/user (fast)
 git clone ...
 ```
+
+### 11. Adding `--security-opt=no-new-privileges` Without Testing sudo
+
+**Mistake** (October 2025 field finding):
+```json
+{
+  "runArgs": [
+    "--cap-drop=ALL",
+    "--cap-add=NET_ADMIN",
+    "--security-opt=no-new-privileges"  // Breaks sudo!
+  ],
+  "postStartCommand": "sudo /usr/local/bin/init-firewall.sh"
+}
+```
+
+**Error**:
+```bash
+sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+[215179 ms] postStartCommand from devcontainer.json failed with exit code 1.
+```
+
+**Why it breaks**:
+- The `--security-opt=no-new-privileges` flag prevents ALL privilege escalation
+- This includes `sudo` (which needs to escalate from user to root)
+- Any lifecycle hooks using `sudo` will fail silently
+- Container appears to start but initialization scripts don't run
+
+**Real-world impact**:
+- Firewall configuration fails (no network restrictions applied)
+- MCP server setup doesn't complete
+- Database initialization skipped
+- Devcontainer unusable despite successful build
+
+**Fix**:
+
+**Option 1: Remove the flag** (recommended if you need sudo):
+```json
+{
+  "runArgs": [
+    "--cap-drop=ALL",
+    "--cap-add=NET_ADMIN",
+    "--cap-add=NET_RAW",
+    "--cap-add=SETUID",  // Required for sudo
+    "--cap-add=SETGID"   // Required for sudo
+    // no-new-privileges removed
+  ]
+}
+```
+
+**Option 2: Move root operations to build-time**:
+```dockerfile
+# Dockerfile - do everything requiring root at build time
+RUN /usr/local/bin/init-firewall.sh && \
+    iptables-save > /etc/iptables/rules.v4
+
+# devcontainer.json - restore without sudo
+{
+  "postStartCommand": "iptables-restore < /etc/iptables/rules.v4"
+}
+```
+
+**Lesson**: Don't blindly apply security hardening flags from generic Docker guides without testing with your specific devcontainer use case.
+
+### 12. Not Upgrading npm in Dockerfile
+
+**Mistake**:
+```dockerfile
+FROM node:20
+# Assumes npm is latest (it's not!)
+RUN npm install -g @anthropic-ai/claude-code@latest
+```
+
+**Problem**:
+- `node:20` ships with npm from its build date (e.g., npm 10.8.2)
+- Latest npm might be 10.9.2+ with bug fixes and security patches
+- `apt-get update` won't upgrade npm (it's not an apt package)
+
+**Real-world notification**:
+```bash
+npm notice New patch version of npm available! 10.8.2 -> 10.9.2
+npm notice Run `npm install -g npm@10.9.2` to update!
+```
+
+**Fix**:
+```dockerfile
+FROM node:20
+
+ARG CLAUDE_CODE_VERSION=latest
+
+# ALWAYS upgrade npm first
+RUN npm install -g npm@latest
+
+# Then install other global packages
+RUN npm install -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}
+```
+
+**Why it matters**:
+- Security vulnerabilities patched in newer npm versions
+- Performance improvements (faster installs, better caching)
+- Bug fixes for obscure edge cases
+- Takes 10 seconds during build, saves hours of debugging later
+
+### 13. Not Using BuildKit Cache Mounts (Slow Rebuilds)
+
+**Mistake**:
+```dockerfile
+# Redownloads 500MB+ of packages on EVERY rebuild
+RUN apt-get update && apt-get install -y \
+    chromium \
+    build-essential \
+    git
+```
+
+**Result**:
+- First build: 10 minutes
+- Rebuild after changing ONE line: 10 minutes (redownloads everything)
+- Team members frustrated by slow iteration
+
+**Fix**:
+```dockerfile
+# Caches packages, only downloads new/changed ones
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+    apt-get update && apt-get install -y \
+    chromium \
+    build-essential \
+    git \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+```
+
+**Performance improvement**:
+- First build: 10 minutes (same)
+- Subsequent rebuilds: 2 minutes (5x faster!)
+- Over 10 rebuilds: Saves 80 minutes
+
+**When you notice this**:
+- Frequent Dockerfile changes (debugging, adding tools)
+- Team complaining about slow devcontainer builds
+- Seeing "Downloading..." repeatedly for same packages
+
+### 14. Missing `"init": true` for Process Management
+
+**Mistake**:
+```json
+{
+  "name": "My Devcontainer",
+  "build": {"dockerfile": "Dockerfile"}
+  // Missing init process manager
+}
+```
+
+**Symptoms**:
+- Zombie processes accumulate (`<defunct>` in `ps aux`)
+- Signals not properly forwarded (Ctrl+C doesn't work as expected)
+- Background processes don't clean up
+- Container shutdown takes longer than expected
+
+**Fix**:
+```json
+{
+  "name": "My Devcontainer",
+  "init": true,  // Enables tini process manager
+  "build": {"dockerfile": "Dockerfile"}
+}
+```
+
+**What `"init": true` does**:
+- Adds `tini` or similar init process as PID 1
+- Properly reaps zombie processes
+- Forwards signals correctly (SIGTERM, SIGINT)
+- Ensures clean container shutdown
+
+**Verification**:
+```bash
+# Inside container with init: true
+ps aux | head -2
+# Should see: tini or /bin/sh or node as PID 1 (not your app directly)
+
+# Without init: true
+ps aux | head -2
+# Might see: your app as PID 1 (problematic)
+```
+
+**When to ALWAYS use**:
+- ✅ Containers running long-lived processes
+- ✅ Containers with background jobs
+- ✅ Devcontainers where you run tests frequently
+- ✅ Production-like development environments
+
+**Modern devcontainer best practice**: Always include `"init": true` unless you have a specific reason not to.
 
 ---
 
