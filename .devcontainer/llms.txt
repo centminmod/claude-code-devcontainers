@@ -2079,6 +2079,8 @@ WORKDIR /workspaces
  "extensions": [
  "anthropic.claude-code",
  "ms-python.python",
+ "ms-python.vscode-pylance",
+ "ms-python.debugpy",
  "ms-toolsai.jupyter"
  ]
  }
@@ -3675,7 +3677,14 @@ RUN npm install -g \
  "google.gemini-cli-vscode-ide-companion",
  "google.geminicodeassist",
  "github.copilot",
- "github.copilot-chat"
+ "github.copilot-chat",
+ "kilocode.kilo-code",
+ "tamasfe.even-better-toml",
+ "ms-toolsai.jupyter-keymap",
+ "ms-vscode.sublime-keybindings",
+ "grapecity.gc-excelviewer",
+ "imgildev.vscode-json-flow",
+ "redhat.vscode-yaml"
  ]
  }
  }
