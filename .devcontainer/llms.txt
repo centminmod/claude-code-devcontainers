@@ -4457,6 +4457,15 @@ echo "$cf_ranges" | jq -r '.result.ipv4_cidrs[]' | while read -r cidr; do
  ipset add allowed-domains "$cidr" -exist
 done
 
+# === Fetch and add AWS IP ranges (covers many AI services: Hugging Face, Replicate, etc.) ===
+# Filtered for US East/West regions and EC2/CloudFront services only to limit allowlist size
+echo "Fetching AWS IP ranges..."
+aws_ranges=$(curl -s https://ip-ranges.amazonaws.com/ip-ranges.json)
+echo "$aws_ranges" | jq -r '.prefixes[] | select(.region == "us-east-1" or .region == "us-west-2") | select(.service == "EC2" or .service == "CLOUDFRONT") | .ip_prefix' | aggregate -q | while read -r cidr; do
+ echo "Adding AWS range $cidr"
+ ipset add allowed-domains "$cidr" -exist
+done
+
 # === Resolve and add all trusted domains (defense-in-depth: includes DNS backup) ===
 # Defense-in-depth: Services with IP ranges (above) also included here as DNS backup
 # This ensures comprehensive coverage and handles edge cases
@@ -4485,7 +4494,26 @@ for domain in \
  "docs.mcp.cloudflare.com" "mcp.context7.com" \
  "vercel.com" "ui.shadcn.com" "tailwindcss.com" \
  "radix-ui.com" "fonts.googleapis.com" "fonts.gstatic.com" \
- "react.dev" "reactjs.org" "esm.sh" "lucide.dev"; do
+ "react.dev" "reactjs.org" "esm.sh" "lucide.dev" \
+ "openrouter.ai" \
+ "api.cerebras.ai" "inference.cerebras.ai" "cloud.cerebras.ai" "cerebras.ai" \
+ "dashscope.aliyuncs.com" "qwen.ai" "qwenlm.ai" "aliyuncs.com" "alibabacloud.com" \
+ "cn-hangzhou.aliyuncs.com" "us-west-1.aliyuncs.com" "ap-southeast-1.aliyuncs.com" \
+ "api.minimax.chat" "minimax.chat" \
+ "z.ai" \
+ "api.cohere.ai" "cohere.ai" \
+ "api.together.xyz" "together.xyz" \
+ "api.replicate.com" "replicate.com" \
+ "api-inference.huggingface.co" "huggingface.co" \
+ "api.perplexity.ai" "perplexity.ai" \
+ "api.mistral.ai" "mistral.ai" \
+ "api.deepinfra.com" "deepinfra.com" \
+ "api.fireworks.ai" "fireworks.ai" \
+ "api.groq.com" "groq.com" \
+ "api.lepton.ai" "lepton.ai" \
+ "mancer.tech" "api.mancer.tech" \
+ "api.deepseek.com" "deepseek.com" \
+ "api.lingyiwanwu.com" "platform.lingyiwanwu.com"; do
 
  # If already an IP, add directly
  if [[ "$domain" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
@@ -4591,6 +4619,22 @@ else
  echo " Allowed domains reachable"
 fi
 
+# Verify OpenRouter API access
+if ! curl --connect-timeout 5 https://openrouter.ai/api/v1/models >/dev/null 2>&1; then
+ echo " Firewall failed - unable to reach OpenRouter"
+ exit 1
+else
+ echo " Can reach OpenRouter as expected"
+fi
+
+# Verify Cerebras API access
+if ! curl --connect-timeout 5 https://api.cerebras.ai/v1/models >/dev/null 2>&1; then
+ echo " Firewall failed - unable to reach Cerebras"
+ exit 1
+else
+ echo " Can reach Cerebras as expected"
+fi
+
 # Mark as configured
 touch "$STATE_FILE"
 echo "Firewall state saved"
@@ -4600,13 +4644,14 @@ echo "Firewall state saved"
 1. **Three-layer IPv6 security** - Container creation, runtime disable, ip6tables rules
 2. **Graceful degradation** - Container starts successfully even if IPv6 can't be disabled
 3. **Maximum compatibility** - Works across Docker Desktop, Podman, cloud environments
-4. **ipset for efficiency** - Much faster than individual iptables rules for 50+ domains
-5. **Dynamic IP range fetching** - Fetches official IP ranges for GitHub, Anthropic, Google, Cloudflare
-6. **DNS resolution backup** - Defense-in-depth: DNS resolution for all domains (including those with IP ranges)
-7. **Docker DNS preservation** - Maintains container networking
-8. **State file** - Skips reconfiguration on container restart
-9. **Comprehensive verification** - Tests IPv6, blocked domains, allowed domains (warnings, not failures)
-10. **50+ whitelisted domains** - All package registries, AI APIs, CDNs covered
+4. **ipset for efficiency** - Much faster than individual iptables rules for 100+ domains
+5. **Dynamic IP range fetching** - Fetches official IP ranges for GitHub, Anthropic, Google, Cloudflare, AWS
+6. **AWS IP ranges** - Filtered for US regions (us-east-1, us-west-2) and EC2/CloudFront services
+7. **DNS resolution backup** - Defense-in-depth: DNS resolution for all domains (including those with IP ranges)
+8. **Docker DNS preservation** - Maintains container networking
+9. **State file** - Skips reconfiguration on container restart
+10. **Comprehensive verification** - Tests IPv6, blocked domains, GitHub, OpenRouter, Cerebras APIs
+11. **100+ whitelisted domains** - All package registries, AI APIs (OpenRouter, Cerebras, Qwen, Minimax, z.ai, Cohere, Together, Replicate, Hugging Face, Perplexity, Mistral, DeepInfra, Fireworks, Groq, Lepton, DeepSeek, 01.AI), CDNs covered
 
 **Dockerfile additions**:
 
