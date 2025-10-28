@@ -3711,6 +3711,40 @@ RUN npm install -g \
 - Different projects can have different API keys
 - Credential isolation improves security
 
+### API Key Configuration
+
+**Method 1: .env File (Recommended)** ⭐
+
+Create `.env` in project root:
+
+```bash
+cp .env.example .env
+# Edit and add: GEMINI_API_KEY=your_key_here
+```
+
+Benefits:
+- Per-project credentials (different keys for different containers)
+- Git-ignored by default (secure)
+- Standard devcontainer practice
+- Loaded automatically on container start via `--env-file` in devcontainer.json
+
+**Method 2: Settings File**
+
+```bash
+mkdir -p ~/.gemini
+echo '{"apiKey": "YOUR_KEY"}' > ~/.gemini/settings.json
+```
+
+**Method 3: Environment Variable**
+
+```bash
+export GEMINI_API_KEY=YOUR_KEY  # Add to .bashrc/.zshrc for persistence
+```
+
+⚠️ **Security**: Always ensure .env is in .gitignore before adding real API keys.
+
+Get your API key: https://makersuite.google.com/app/apikey
+
 ### Verifying Multi-AI Setup
 
 ```bash
