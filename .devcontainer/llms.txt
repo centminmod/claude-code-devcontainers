@@ -31,7 +31,10 @@ cat > .devcontainer/devcontainer.json << 'EOF'
  "customizations": {"vscode": {"extensions": ["anthropic.claude-code"]}},
  "postCreateCommand": "npm install -g @anthropic-ai/claude-code@latest",
  "remoteUser": "node",
- "mounts": ["source=claude-${devcontainerId},target=/home/node/.claude,type=volume"]
+ "mounts": [
+  "source=claude-${devcontainerId},target=/home/node/.claude,type=volume",
+  "source=ghub-config-${devcontainerId},target=/home/node/.config/gh,type=volume"
+ ]
 }
 EOF
 code .
@@ -579,6 +582,7 @@ your-project/
  {
  "mounts": [
  "source=claude-config-${devcontainerId},target=/home/node/.claude,type=volume",
+ "source=ghub-config-${devcontainerId},target=/home/node/.config/gh,type=volume",
  "source=${localEnv:HOME}/.ssh,target=/home/node/.ssh,type=bind,readonly"
  ]
  }
@@ -2053,6 +2057,7 @@ Let me update your configuration...
  "remoteUser": "node",
  "mounts": [
  "source=claude-${devcontainerId},target=/home/node/.claude,type=volume",
+ "source=ghub-config-${devcontainerId},target=/home/node/.config/gh,type=volume",
  "source=npm-cache-${devcontainerId},target=/home/node/.npm,type=volume"
  ]
 }
@@ -2089,7 +2094,8 @@ WORKDIR /workspaces
  "postCreateCommand": "pip install -r requirements.txt",
  "remoteUser": "vscode",
  "mounts": [
- "source=claude-${devcontainerId},target=/home/vscode/.claude,type=volume"
+ "source=claude-${devcontainerId},target=/home/vscode/.claude,type=volume",
+ "source=ghub-config-${devcontainerId},target=/home/vscode/.config/gh,type=volume"
  ]
 }
 ```
@@ -2132,6 +2138,7 @@ See [Multi-Container Patterns](#multi-container-patterns-docker-compose) for Doc
  "remoteUser": "vscode",
  "mounts": [
  "source=claude-${devcontainerId},target=/home/vscode/.claude,type=volume",
+ "source=ghub-config-${devcontainerId},target=/home/vscode/.config/gh,type=volume",
  "source=go-pkg-${devcontainerId},target=/go/pkg,type=volume"
  ]
 }
@@ -2985,7 +2992,8 @@ cat > .devcontainer/devcontainer.json << 'EOF'
  "postCreateCommand": "npm install",
  "remoteUser": "node",
  "mounts": [
- "source=claude-${devcontainerId},target=/home/node/.claude,type=volume"
+ "source=claude-${devcontainerId},target=/home/node/.claude,type=volume",
+ "source=ghub-config-${devcontainerId},target=/home/node/.config/gh,type=volume"
  ]
 }
 EOF
@@ -3009,7 +3017,8 @@ cat > .devcontainer/devcontainer.json << 'EOF'
  "postCreateCommand": "npm install",
  "remoteUser": "node",
  "mounts": [
- "source=claude-${devcontainerId},target=/home/node/.claude,type=volume"
+ "source=claude-${devcontainerId},target=/home/node/.claude,type=volume",
+ "source=ghub-config-${devcontainerId},target=/home/node/.config/gh,type=volume"
  ]
 }
 EOF
@@ -3700,7 +3709,8 @@ RUN npm install -g \
  "mounts": [
  "source=claude-code-config-${devcontainerId},target=/home/node/.claude,type=volume",
  "source=codex-config-${devcontainerId},target=/home/node/.codex,type=volume",
- "source=gemini-config-${devcontainerId},target=/home/node/.gemini,type=volume"
+ "source=gemini-config-${devcontainerId},target=/home/node/.gemini,type=volume",
+ "source=ghub-config-${devcontainerId},target=/home/node/.config/gh,type=volume"
  ]
 }
 ```
@@ -5371,6 +5381,300 @@ test -x .git/hooks/pre-commit && echo "✅ Hook still installed"
 
 ---
 
+### GitHub CLI Authentication
+
+The GitHub CLI (`gh`) is pre-installed for creating pull requests and managing repositories from the terminal. It requires one-time authentication that persists across container rebuilds.
+
+#### Why GitHub CLI Matters
+
+**Git workflow integration**:
+- Create pull requests: `gh pr create`
+- Manage issues: `gh issue list`
+- View PR status: `gh pr status`
+- Review code: `gh pr view`
+
+**Required for**:
+- git-pr-helper skill (PR creation and merge coordination)
+- CLAUDE.md Git Safety Protocol workflows
+- Pull request-based development workflows
+
+**Without authentication**: Commands fail with:
+```
+To get started with GitHub CLI, please run:  gh auth login
+Alternatively, populate the GH_TOKEN environment variable with a GitHub API authentication token.
+```
+
+#### Method 1: Web Browser Authentication (Recommended)
+
+**Interactive setup**:
+```bash
+gh auth login
+```
+
+**Step-by-step flow**:
+```
+? What account do you want to log into?
+  ▸ GitHub.com
+    GitHub Enterprise Server
+
+? What is your preferred protocol for Git operations?
+    HTTPS
+  ▸ SSH
+
+? Authenticate Git with your GitHub credentials?
+  ▸ Yes
+    No
+
+? How would you like to authenticate GitHub CLI?
+  ▸ Login with a web browser
+    Paste an authentication token
+
+! First copy your one-time code: XXXX-XXXX
+Press Enter to open github.com in your browser...
+```
+
+**Browser steps**:
+1. Browser opens to https://github.com/login/device
+2. Paste the one-time code
+3. Click "Authorize GitHub CLI"
+4. Return to terminal
+
+**Success message**:
+```
+✓ Authentication complete.
+- gh config set -h github.com git_protocol https
+✓ Configured git protocol
+✓ Logged in as your-username
+```
+
+#### Method 2: Personal Access Token
+
+**When to use**:
+- Headless environments (no browser)
+- Automation/CI workflows
+- Pre-configured authentication
+
+**Create token**:
+1. Go to https://github.com/settings/tokens
+2. Click "Generate new token" → "Generate new token (classic)"
+3. Select scopes:
+   - `repo` - Full repository access
+   - `workflow` - Update GitHub Actions
+   - `read:org` - Read organization data
+4. Generate and copy token (shown once)
+
+**Method A: Interactive**:
+```bash
+gh auth login --with-token
+# Paste token and press Enter
+```
+
+**Method B: File-based**:
+```bash
+echo "ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxx" > /tmp/gh-token.txt
+gh auth login --with-token < /tmp/gh-token.txt
+rm /tmp/gh-token.txt  # Clean up
+```
+
+**Method C: Environment variable (.env file)**:
+```bash
+# In .env file
+GH_TOKEN=ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+# Restart container to load .env
+# gh will automatically use GH_TOKEN
+```
+
+#### Persistence
+
+**Storage location**:
+```
+/home/node/.config/gh/hosts.yml
+```
+
+**Docker volume backing**:
+```json
+{
+ "mounts": [
+ "source=ghub-config-${devcontainerId},target=/home/node/.config/gh,type=volume"
+ ]
+}
+```
+
+**Persistence behavior**:
+- ✅ Survives container rebuilds
+- ✅ Survives VS Code restarts
+- ✅ One-time setup per devcontainer volume
+- ❌ Lost only if volume deleted: `docker volume rm ghub-config-xxx`
+
+**Verify persistence**:
+```bash
+# Before rebuild
+gh auth status
+
+# Rebuild container (Cmd+Shift+P → "Rebuild Container")
+
+# After rebuild
+gh auth status  # Should still show authenticated
+```
+
+#### Verification and Testing
+
+**Check authentication status**:
+```bash
+gh auth status
+```
+
+**Expected output (authenticated)**:
+```
+github.com
+  ✓ Logged in to github.com as your-username (/home/node/.config/gh/hosts.yml)
+  ✓ Git operations protocol: https
+  ✓ Token: *******************
+```
+
+**Expected output (not authenticated)**:
+```
+github.com
+  ✗ Not logged in
+  Run 'gh auth login' to authenticate
+```
+
+**Test GitHub CLI functionality**:
+```bash
+# List your repositories
+gh repo list
+
+# View pull requests
+gh pr list
+
+# Check API rate limit
+gh api rate_limit
+```
+
+#### Troubleshooting
+
+**Problem**: `gh pr create` fails with authentication error
+
+**Solution**:
+```bash
+# Check current status
+gh auth status
+
+# If not authenticated, run setup
+gh auth login
+
+# Follow interactive prompts
+```
+
+**Problem**: Authentication lost after container rebuild
+
+**Root cause**: `/home/node/.config/gh` not mounted as volume
+
+**Solution**: Verify devcontainer.json has gh mount:
+```json
+{
+ "mounts": [
+ "source=ghub-config-${devcontainerId},target=/home/node/.config/gh,type=volume"
+ ]
+}
+```
+
+**Problem**: Token expired or revoked
+
+**Symptoms**:
+```
+gh: authentication token invalid
+```
+
+**Solution**:
+```bash
+# Re-authenticate
+gh auth login
+
+# Or refresh token
+gh auth refresh
+```
+
+**Problem**: Permission denied errors for certain operations
+
+**Root cause**: Token missing required scopes
+
+**Solution**: Create new token with required scopes (repo, workflow, read:org)
+
+#### Security Best Practices
+
+**Token scope principle**: Request minimum necessary permissions
+- PR creation only: `repo` scope sufficient
+- GitHub Actions workflows: Add `workflow` scope
+- Organization access: Add `read:org` scope
+
+**Token rotation**: Rotate tokens periodically (every 90 days recommended)
+
+**Environment isolation**: Each devcontainer has isolated `/home/node/.config/gh`
+- No credential sharing between projects
+- Tokens don't leak to host system
+- Per-project access control
+
+**Token storage**:
+- ✅ Stored in Docker volume (isolated, persistent)
+- ✅ Not committed to git (`.gitignore` excludes `.env`)
+- ❌ Never hardcode tokens in devcontainer.json
+
+**Revoke compromised tokens**:
+1. Go to https://github.com/settings/tokens
+2. Find and click token
+3. Click "Delete" or "Revoke"
+4. Re-run `gh auth login` in container
+
+#### Integration with Git Workflows
+
+**Pull request creation**:
+```bash
+# Create feature branch
+git checkout -b feature/new-feature
+
+# Make changes and commit
+git add .
+git commit -m "Add new feature"
+
+# Push and create PR (gh auto-pushes if needed)
+gh pr create --title "Add new feature" --body "Description"
+```
+
+**View PR status**:
+```bash
+# List PRs for current repo
+gh pr list
+
+# View specific PR
+gh pr view 123
+
+# Check PR checks/status
+gh pr checks
+```
+
+**Merge PR**:
+```bash
+# Merge with default strategy
+gh pr merge 123
+
+# Squash merge
+gh pr merge 123 --squash
+
+# Rebase merge
+gh pr merge 123 --rebase
+```
+
+#### References
+
+- [GitHub CLI Documentation](https://cli.github.com/manual/) - Official gh documentation
+- [GitHub Personal Access Tokens](https://github.com/settings/tokens) - Create and manage tokens
+- [GitHub CLI Authentication](https://cli.github.com/manual/gh_auth_login) - Authentication methods
+- [Git Safety Protocol](../CLAUDE.md#git-safety-protocol) - Workflow guidance using gh
+
+---
+
 ### Runtime Security Tools
 
 #### gVisor (Application Kernel)
@@ -5714,6 +6018,7 @@ Volumes ensure configuration persists across container rebuilds.
 {
  "mounts": [
  "source=claude-code-config-${devcontainerId},target=/home/node/.claude,type=volume",
+ "source=ghub-config-${devcontainerId},target=/home/node/.config/gh,type=volume",
  "source=bashhistory-${devcontainerId},target=/commandhistory,type=volume",
  "source=npm-cache-${devcontainerId},target=/home/node/.npm,type=volume"
  ]
@@ -5762,6 +6067,7 @@ Volumes ensure configuration persists across container rebuilds.
  "source=claude-${devcontainerId},target=/home/node/.claude,type=volume",
  "source=codex-${devcontainerId},target=/home/node/.codex,type=volume",
  "source=gemini-${devcontainerId},target=/home/node/.gemini,type=volume",
+ "source=ghub-config-${devcontainerId},target=/home/node/.config/gh,type=volume",
 
  // Shell history (quality of life)
  "source=bashhistory-${devcontainerId},target=/commandhistory,type=volume",
@@ -6298,7 +6604,8 @@ USER node
 ```json
 {
  "mounts": [
- "source=claude-${devcontainerId},target=/home/node/.claude,type=volume"
+ "source=claude-${devcontainerId},target=/home/node/.claude,type=volume",
+ "source=ghub-config-${devcontainerId},target=/home/node/.config/gh,type=volume"
  ]
 }
 ```
@@ -6512,7 +6819,8 @@ RUN git config --global core.excludesfile ~/.gitignore_global && \
 ```json
 {
  "mounts": [
- "source=claude-${devcontainerId},target=/home/node/.claude,type=volume"
+ "source=claude-${devcontainerId},target=/home/node/.claude,type=volume",
+ "source=ghub-config-${devcontainerId},target=/home/node/.config/gh,type=volume"
  ]
 }
 ```
@@ -6788,7 +7096,10 @@ docker system prune -a --volumes # Nuclear (removes EVERYTHING)
  "vscode": {"extensions": ["anthropic.claude-code"]}
  },
  "remoteUser": "node",
- "mounts": ["source=claude-${devcontainerId},target=/home/node/.claude,type=volume"]
+ "mounts": [
+  "source=claude-${devcontainerId},target=/home/node/.claude,type=volume",
+  "source=ghub-config-${devcontainerId},target=/home/node/.config/gh,type=volume"
+ ]
 }
 ```
 
@@ -7216,12 +7527,13 @@ RUN npm install -g \
  "mounts": [
  "source=claude-${devcontainerId},target=/home/node/.claude,type=volume",
  "source=codex-${devcontainerId},target=/home/node/.codex,type=volume",
- "source=gemini-${devcontainerId},target=/home/node/.gemini,type=volume"
+ "source=gemini-${devcontainerId},target=/home/node/.gemini,type=volume",
+ "source=ghub-config-${devcontainerId},target=/home/node/.config/gh,type=volume"
  ]
 }
 ```
 
-Each AI gets isolated API keys and settings.
+Each AI gets isolated API keys and settings. GitHub CLI persists authentication tokens.
 
 **Q: How do I switch between AI assistants?**
 
