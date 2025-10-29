@@ -29,7 +29,7 @@ cat > .devcontainer/devcontainer.json << 'EOF'
  "name": "Claude Code",
  "image": "node:20",
  "customizations": {"vscode": {"extensions": ["anthropic.claude-code"]}},
- "postCreateCommand": "npm install -g @anthropic-ai/claude-code@latest",
+ "postCreateCommand": "npm install -g @anthropic-ai/claude-code@latest && npm install -g @openai/codex && npm install -g @google/gemini-cli",
  "remoteUser": "node",
  "mounts": [
   "source=claude-code-bashhistory-${devcontainerId},target=/commandhistory,type=volume",
@@ -439,7 +439,8 @@ your-project/
 - **Description**: Command to run after container assigned to user for first time
 - **When**: After user assignment (first start)
 - **Access**: Has access to user secrets, assets, and permissions
-- **Example**: `"npm install && npm run setup"`
+- **Example**: `"npm install -g @anthropic-ai/claude-code@latest && npm install -g @openai/codex"`
+- **Use For**: Global package installations that need volume persistence (runs AFTER volumes mount)
 - **Execution**: Background by default (non-blocking)
 - **Schema**: https://containers.dev/implementors/json_reference/#lifecycle-scripts
 
@@ -2075,11 +2076,12 @@ Let me update your configuration...
  }
  },
  "forwardPorts": [3000],
- "postCreateCommand": "npm install",
+ "postCreateCommand": "npm install -g @anthropic-ai/claude-code@latest && npm install",
  "remoteUser": "node",
  "mounts": [
  "source=claude-${devcontainerId},target=/home/node/.claude,type=volume",
  "source=ghub-config-${devcontainerId},target=/home/node/.config/gh,type=volume",
+ "source=npm-global-${devcontainerId},target=/home/node/.npm-global,type=volume",
  "source=npm-cache-${devcontainerId},target=/home/node/.npm,type=volume"
  ]
 }
@@ -2090,7 +2092,7 @@ Let me update your configuration...
 FROM node:20
 RUN apt-get update && apt-get install -y git && apt-get clean
 USER node
-RUN npm install -g @anthropic-ai/claude-code@latest
+# Claude Code installed via postCreateCommand (after npm-global volume mounts)
 WORKDIR /workspaces
 ```
 
@@ -2113,11 +2115,12 @@ WORKDIR /workspaces
  }
  },
  "forwardPorts": [8888],
- "postCreateCommand": "pip install -r requirements.txt",
+ "postCreateCommand": "npm install -g @anthropic-ai/claude-code@latest && pip install -r requirements.txt",
  "remoteUser": "vscode",
  "mounts": [
  "source=claude-${devcontainerId},target=/home/vscode/.claude,type=volume",
- "source=ghub-config-${devcontainerId},target=/home/vscode/.config/gh,type=volume"
+ "source=ghub-config-${devcontainerId},target=/home/vscode/.config/gh,type=volume",
+ "source=npm-global-${devcontainerId},target=/home/vscode/.npm-global,type=volume"
  ]
 }
 ```
@@ -2131,7 +2134,9 @@ USER vscode
 RUN pip install --user jupyterlab pandas numpy matplotlib
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
  apt-get install -y nodejs
-RUN npm install -g @anthropic-ai/claude-code@latest
+# Claude Code installed via postCreateCommand (after npm-global volume mounts)
+ENV NPM_CONFIG_PREFIX=/home/vscode/.npm-global
+ENV PATH=$PATH:/home/vscode/.npm-global/bin
 WORKDIR /workspaces
 ```
 
@@ -2157,10 +2162,12 @@ See [Multi-Container Patterns](#multi-container-patterns-docker-compose) for Doc
  }
  }
  },
+ "postCreateCommand": "npm install -g @anthropic-ai/claude-code@latest",
  "remoteUser": "vscode",
  "mounts": [
  "source=claude-${devcontainerId},target=/home/vscode/.claude,type=volume",
  "source=ghub-config-${devcontainerId},target=/home/vscode/.config/gh,type=volume",
+ "source=npm-global-${devcontainerId},target=/home/vscode/.npm-global,type=volume",
  "source=go-pkg-${devcontainerId},target=/go/pkg,type=volume"
  ]
 }
@@ -2173,7 +2180,9 @@ RUN apt-get update && apt-get install -y git curl nodejs npm && apt-get clean
 RUN useradd -m -s /bin/bash vscode && \
  mkdir -p /go && chown vscode:vscode /go
 USER vscode
-RUN npm install -g @anthropic-ai/claude-code@latest
+# Claude Code installed via postCreateCommand (after npm-global volume mounts)
+ENV NPM_CONFIG_PREFIX=/home/vscode/.npm-global
+ENV PATH=$PATH:/home/vscode/.npm-global/bin
 ENV GOPATH=/go
 WORKDIR /workspaces
 ```
@@ -3036,11 +3045,12 @@ cat > .devcontainer/devcontainer.json << 'EOF'
  ]
  }
  },
- "postCreateCommand": "npm install",
+ "postCreateCommand": "npm install -g @anthropic-ai/claude-code@latest && npm install",
  "remoteUser": "node",
  "mounts": [
  "source=claude-${devcontainerId},target=/home/node/.claude,type=volume",
- "source=ghub-config-${devcontainerId},target=/home/node/.config/gh,type=volume"
+ "source=ghub-config-${devcontainerId},target=/home/node/.config/gh,type=volume",
+ "source=npm-global-${devcontainerId},target=/home/node/.npm-global,type=volume"
  ]
 }
 EOF
@@ -3063,8 +3073,9 @@ RUN apt-get update && \
 # Switch to non-root user
 USER node
 
-# Install Claude Code globally
-RUN npm install -g @anthropic-ai/claude-code@latest
+# Claude Code installed via postCreateCommand (after npm-global volume mounts)
+ENV NPM_CONFIG_PREFIX=/home/node/.npm-global
+ENV PATH=$PATH:/home/node/.npm-global/bin
 
 WORKDIR /workspaces
 EOF
@@ -6736,9 +6747,14 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 
 USER node
 
-# Cache npm packages during global installs
+# Note: For production devcontainers, install CLI tools via postCreateCommand
+# to avoid volume persistence conflicts. This example shows BuildKit caching only.
+# Cache npm packages during global installs (demonstration purpose)
 RUN --mount=type=cache,target=/home/node/.npm,uid=1000 \
  npm install -g @anthropic-ai/claude-code@latest
+
+# Recommended: Move to devcontainer.json instead:
+# "postCreateCommand": "npm install -g @anthropic-ai/claude-code@latest"
 ```
 
 **Common Cache Locations**:
@@ -7246,19 +7262,32 @@ npm notice Run `npm install -g npm@10.9.2` to update!
 ```dockerfile
 FROM node:20
 
-ARG CLAUDE_CODE_VERSION=latest
-
-# ALWAYS upgrade npm first
+# ALWAYS upgrade npm first (in Dockerfile is OK)
 RUN npm install -g npm@latest
 
-# Then install other global packages
-RUN npm install -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}
+# CLI tools installed via postCreateCommand (best practice)
+# See devcontainer.json below
+ENV NPM_CONFIG_PREFIX=/home/node/.npm-global
+ENV PATH=$PATH:/home/node/.npm-global/bin
+USER node
+```
+
+```json
+// devcontainer.json
+{
+  "build": {"dockerfile": "Dockerfile"},
+  "postCreateCommand": "npm install -g @anthropic-ai/claude-code@latest",
+  "mounts": [
+    "source=npm-global-${devcontainerId},target=/home/node/.npm-global,type=volume"
+  ]
+}
 ```
 
 **Why it matters**:
 - Security vulnerabilities patched in newer npm versions
 - Performance improvements (faster installs, better caching)
 - Bug fixes for obscure edge cases
+- postCreateCommand avoids volume persistence conflicts (installs AFTER volumes mount)
 - Takes 10 seconds during build, saves hours of debugging later
 
 ### 13. Not Using BuildKit Cache Mounts (Slow Rebuilds)
@@ -7459,10 +7488,12 @@ docker system prune -a --volumes # Nuclear (removes EVERYTHING)
  "customizations": {
  "vscode": {"extensions": ["anthropic.claude-code"]}
  },
+ "postCreateCommand": "npm install -g @anthropic-ai/claude-code@latest",
  "remoteUser": "node",
  "mounts": [
   "source=claude-${devcontainerId},target=/home/node/.claude,type=volume",
-  "source=ghub-config-${devcontainerId},target=/home/node/.config/gh,type=volume"
+  "source=ghub-config-${devcontainerId},target=/home/node/.config/gh,type=volume",
+  "source=npm-global-${devcontainerId},target=/home/node/.npm-global,type=volume"
  ]
 }
 ```
@@ -7472,7 +7503,9 @@ docker system prune -a --volumes # Nuclear (removes EVERYTHING)
 FROM node:20
 RUN apt-get update && apt-get install -y git && apt-get clean
 USER node
-RUN npm install -g @anthropic-ai/claude-code@latest
+# Claude Code installed via postCreateCommand (after npm-global volume mounts)
+ENV NPM_CONFIG_PREFIX=/home/node/.npm-global
+ENV PATH=$PATH:/home/node/.npm-global/bin
 RUN git config --global core.excludesfile ~/.gitignore_global && \
  echo ".claude/settings.local.json" > /home/node/.gitignore_global
 ```
