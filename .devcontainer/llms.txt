@@ -1885,7 +1885,15 @@ Let me update your configuration...
  },
  "chrome-devtools": {
  "command": "npx",
- "args": ["chrome-devtools-mcp@latest"],
+ "args": [
+   "-y",
+   "chrome-devtools-mcp@latest",
+   "--executablePath=/usr/bin/chromium",
+   "--headless",
+   "--chromeArg=--no-sandbox",
+   "--chromeArg=--disable-setuid-sandbox",
+   "--chromeArg=--disable-dev-shm-usage"
+ ],
  "transport": {"type": "stdio"}
  }
  }
@@ -3972,7 +3980,15 @@ MCP servers use two transport mechanisms:
 ```json
 {
  "command": "npx",
- "args": ["chrome-devtools-mcp@latest"],
+ "args": [
+   "-y",
+   "chrome-devtools-mcp@latest",
+   "--executablePath=/usr/bin/chromium",
+   "--headless",
+   "--chromeArg=--no-sandbox",
+   "--chromeArg=--disable-setuid-sandbox",
+   "--chromeArg=--disable-dev-shm-usage"
+ ],
  "transport": {
  "type": "stdio"
  }
@@ -3981,6 +3997,7 @@ MCP servers use two transport mechanisms:
 - **Use when**: Server runs as local npm package (Chrome DevTools, mcp-remote)
 - **Pros**: Works offline, full control
 - **Cons**: Needs installation, manual updates
+- **Note**: Chrome DevTools MCP requires `--executablePath=/usr/bin/chromium` in containers (Chromium is installed instead of Google Chrome)
 
 ### Testing MCP Server Transport Support
 
@@ -4034,7 +4051,7 @@ View MCP connection logs:
 |--------|-----|------|-------------------|-------|
 | **Context7** | Yes | No | Yes | SSE: `/sse` endpoint, stdio: use `mcp-remote` |
 | **Cloudflare Docs** | Yes | No | Yes | SSE: `/sse` endpoint, stdio: use `mcp-remote` |
-| **Chrome DevTools** | No | No | Yes | Local stdio only: `npx chrome-devtools-mcp@latest` |
+| **Chrome DevTools** | No | No | Yes | Local stdio only: `npx chrome-devtools-mcp@latest`. **In containers**: Add `--executablePath=/usr/bin/chromium` |
 
 **Note**: While the MCP specification calls the transport "Streamable HTTP", the JSON configuration still uses `"type": "sse"`. Do not confuse this with `"type": "http"` which is a different (future) transport method.
 
