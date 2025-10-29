@@ -5047,6 +5047,330 @@ networks:
 
 ---
 
+### Git Safety and Branch Protection
+
+**Problem**: AI assistants (or developers) might accidentally commit directly to protected branches (`main`/`master`) or perform destructive operations without proper safeguards.
+
+**Solution**: Pre-commit git hook that technically enforces branch protection by blocking commits to `main` and `master` branches.
+
+#### Why Git Hooks?
+
+**Git hooks are not tracked in `.git/hooks/`** (`.git/` is in `.gitignore`), which means:
+- Hooks don't transfer when cloning the repository
+- Must be installed manually after cloning or rebuilding containers
+- Provide **technical enforcement** (not just guidance)
+
+#### Installation
+
+**Step 1: Create setup script** (`.devcontainer/setup-git-hooks.sh`):
+
+```bash
+#!/bin/bash
+#
+# Setup Git Hooks
+#
+# Installs git hooks for branch protection and safety.
+# Run this after cloning the repository or rebuilding the container.
+#
+
+HOOKS_DIR="/workspaces/claude-devcontainer/.git/hooks"
+
+echo "=== Git Hooks Setup ==="
+echo ""
+
+# Create hooks directory if it doesn't exist
+if [ ! -d "$HOOKS_DIR" ]; then
+    echo "Creating hooks directory..."
+    mkdir -p "$HOOKS_DIR"
+fi
+
+# Install pre-commit hook
+echo "Installing pre-commit hook..."
+cat > "$HOOKS_DIR/pre-commit" << 'EOF'
+#!/bin/bash
+#
+# Git Pre-Commit Hook: Branch Protection
+#
+# Prevents direct commits to main/master branches.
+# Encourages feature branch workflow for safety.
+#
+
+BRANCH=$(git branch --show-current)
+
+# Block commits to protected branches
+if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "master" ]; then
+    echo ""
+    echo "❌ ERROR: Direct commits to '$BRANCH' are not allowed"
+    echo ""
+    echo "This is a safety measure to protect your work."
+    echo ""
+    echo "📝 Create a feature branch instead:"
+    echo "   git checkout -b feature/your-feature-name"
+    echo ""
+    echo "Or for session-based work:"
+    echo "   git checkout -b session/$(date +%Y%m%d-%H%M)-description"
+    echo ""
+    echo "⚠️  To bypass this hook (NOT recommended):"
+    echo "   git commit --no-verify"
+    echo ""
+    exit 1
+fi
+
+# Success - allow commit
+echo "✅ Committing to branch: $BRANCH"
+exit 0
+EOF
+
+chmod +x "$HOOKS_DIR/pre-commit"
+
+echo "✅ Pre-commit hook installed"
+echo ""
+
+# Verify installation
+if [ -x "$HOOKS_DIR/pre-commit" ]; then
+    echo "✅ Hook is executable"
+else
+    echo "❌ Hook is not executable!"
+    exit 1
+fi
+
+echo ""
+echo "=== Setup Complete ==="
+echo ""
+echo "Git hooks have been installed successfully."
+echo ""
+echo "Features:"
+echo "  • Blocks direct commits to main/master"
+echo "  • Encourages feature branch workflow"
+echo ""
+```
+
+**Step 2: Run setup script after cloning or rebuilding**:
+
+```bash
+# From repository root
+bash .devcontainer/setup-git-hooks.sh
+```
+
+**Expected output**:
+```
+=== Git Hooks Setup ===
+
+Installing pre-commit hook...
+✅ Pre-commit hook installed
+
+✅ Hook is executable
+
+=== Setup Complete ===
+
+Git hooks have been installed successfully.
+
+Features:
+  • Blocks direct commits to main/master
+  • Encourages feature branch workflow
+```
+
+#### Testing the Hook
+
+**Test 1: Verify hook blocks commits to main**
+
+```bash
+# Switch to main branch
+git checkout main
+
+# Try to commit (should be blocked)
+echo "test" > /tmp/test-hook.txt
+git add /tmp/test-hook.txt
+git commit -m "test"
+```
+
+**Expected output** (hook blocks commit):
+```
+❌ ERROR: Direct commits to 'main' are not allowed
+
+This is a safety measure to protect your work.
+
+📝 Create a feature branch instead:
+   git checkout -b feature/your-feature-name
+
+Or for session-based work:
+   git checkout -b session/20251029-1430-description
+
+⚠️  To bypass this hook (NOT recommended):
+   git commit --no-verify
+```
+
+**Test 2: Verify hook allows commits to feature branches**
+
+```bash
+# Create and switch to feature branch
+git checkout -b feature/test-hook
+
+# Commit should succeed
+git add /tmp/test-hook.txt
+git commit -m "test commit"
+```
+
+**Expected output** (hook allows commit):
+```
+✅ Committing to branch: feature/test-hook
+[feature/test-hook abc1234] test commit
+ 1 file changed, 1 insertion(+)
+```
+
+**Test 3: Clean up test branch**
+
+```bash
+# Switch back to main and delete test branch
+git checkout main
+git branch -D feature/test-hook
+rm /tmp/test-hook.txt
+```
+
+#### Branch Naming Conventions
+
+**Feature branches** (long-term work):
+```bash
+git checkout -b feature/add-authentication
+git checkout -b feature/update-api
+git checkout -b fix/broken-login
+git checkout -b refactor/clean-up-code
+```
+
+**Session branches** (exploratory/AI-assisted work):
+```bash
+# Format: session/YYYYMMDD-HHMM-description
+git checkout -b session/20251029-1045-add-firewall
+git checkout -b session/20251029-1430-fix-bug
+git checkout -b session/20251029-1600-update-docs
+```
+
+#### Troubleshooting
+
+**Problem: Hook doesn't block commits**
+
+**Check if hook is installed**:
+```bash
+test -x .git/hooks/pre-commit && echo "✅ Hook installed" || echo "❌ Hook missing"
+```
+
+**If missing, reinstall**:
+```bash
+bash .devcontainer/setup-git-hooks.sh
+```
+
+**Problem: Permission denied error**
+
+**Make hook executable**:
+```bash
+chmod +x .git/hooks/pre-commit
+```
+
+**Verify permissions**:
+```bash
+ls -la .git/hooks/pre-commit
+# Should show: -rwxr-xr-x (note the 'x' permissions)
+```
+
+**Problem: Hook needs to be bypassed for emergency fix**
+
+**Temporary bypass** (NOT recommended):
+```bash
+git commit --no-verify -m "emergency hotfix"
+```
+
+**Better approach**:
+1. Create hotfix branch: `git checkout -b hotfix/critical-fix`
+2. Make your fix and commit normally
+3. Merge via pull request workflow
+
+#### Automatic Installation (Optional)
+
+**Add to devcontainer.json postCreateCommand**:
+
+```json
+{
+  "postCreateCommand": "bash .devcontainer/setup-git-hooks.sh"
+}
+```
+
+**Trade-offs**:
+- ✅ Automatic installation after container creation
+- ✅ Developers can't forget to install
+- ❌ Runs on every rebuild (adds ~1 second to startup)
+- ❌ May be noisy with repeated "hook installed" messages
+
+#### How It Works
+
+1. **Hook execution**: Git automatically runs `.git/hooks/pre-commit` before every commit
+2. **Branch check**: Hook reads current branch name with `git branch --show-current`
+3. **Protection**: If branch is `main` or `master`, hook exits with code 1 (blocks commit)
+4. **Bypass**: Users can override with `--no-verify` flag if absolutely necessary
+
+#### Benefits
+
+- **Technical enforcement**: Not just guidance - actually prevents the commit
+- **Zero performance impact**: Only runs during commits (not during file operations)
+- **Clear error messages**: Provides helpful guidance when blocking commits
+- **Flexible**: Can be bypassed in genuine emergencies
+- **Minimal**: Simple bash script, no dependencies
+
+#### Limitations
+
+- **Must be installed manually**: Doesn't transfer with git clone
+- **Container rebuilds**: Need to reinstall after rebuilding devcontainer
+- **Can be bypassed**: `--no-verify` flag disables all hooks
+- **Only affects git commits**: Doesn't prevent file deletion before commits
+
+#### Integration with AI Assistants
+
+**For Claude Code users**, this hook integrates with:
+- **CLAUDE.md** - Git Safety Protocol provides workflow guidance
+- **git-pr-helper skill** - Assists with PR creation and merge workflow
+- **CLAUDE-patterns.md** - Documents git workflow conventions
+
+**Three-layer defense**:
+1. **Hook** (enforcement) - Blocks commits technically
+2. **CLAUDE.md** (guidance) - Instructions for AI workflow
+3. **Skill** (assistance) - Helps with PR/merge operations
+
+#### Complete Test Procedure
+
+```bash
+# 1. Verify hook installation
+test -x .git/hooks/pre-commit && echo "✅ Installed" || echo "❌ Missing"
+
+# 2. Test main branch protection (should FAIL)
+git checkout main
+echo "test" > /tmp/test-hook.txt
+git add /tmp/test-hook.txt
+git commit -m "test"  # Should be blocked
+
+# 3. Clean up
+git reset HEAD /tmp/test-hook.txt
+
+# 4. Test feature branch (should SUCCEED)
+git checkout -b feature/test-verification
+git add /tmp/test-hook.txt
+git commit -m "test"  # Should succeed
+
+# 5. Clean up test branch
+git checkout main
+git branch -D feature/test-verification
+rm /tmp/test-hook.txt
+
+# 6. Verify hook still active
+test -x .git/hooks/pre-commit && echo "✅ Hook still installed"
+```
+
+#### References
+
+- [setup-git-hooks.sh](./setup-git-hooks.sh) - Hook installation script
+- [Git Hooks Documentation](https://git-scm.com/docs/githooks) - Official git hooks reference
+- [CLAUDE-troubleshooting.md](../CLAUDE-troubleshooting.md) - Detailed troubleshooting guide
+
+---
+
 ### Runtime Security Tools
 
 #### gVisor (Application Kernel)
