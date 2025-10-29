@@ -38,7 +38,10 @@ cat > .devcontainer/devcontainer.json << 'EOF'
   "source=gemini-config-${devcontainerId},target=/home/node/.gemini,type=volume",
   "source=ghub-config-${devcontainerId},target=/home/node/.config/gh,type=volume",
   "source=npm-global-${devcontainerId},target=/home/node/.npm-global,type=volume"
-  // Add your own: "source=<tool>-${devcontainerId},target=<path>,type=volume"
+  // Add cloud tools: "source=aws-config-${devcontainerId},target=/home/node/.aws,type=volume"
+  // Add cloud tools: "source=local-bin-${devcontainerId},target=/home/node/.local,type=volume"
+  // Add cloud tools: "source=wrangler-config-${devcontainerId},target=/home/node/.wrangler,type=volume"
+  // Add Vercel: "source=vercel-config-${devcontainerId},target=/home/node/.vercel,type=volume"
  ]
 }
 EOF
@@ -714,9 +717,15 @@ MCP server needs what?
 
 ```
 What are you persisting?
-├─ API keys, configs (.claude/, .codex/)
+├─ API keys, configs (.claude/, .codex/, .aws/)
 │ → Named volume (survives container deletion)
 │ → source=name-${devcontainerId},target=/path,type=volume
+│
+├─ CLI binaries and tools (AWS CLI, wrangler, vercel)
+│ → Named volume (persists across rebuilds)
+│ → source=local-bin-${devcontainerId},target=/home/node/.local,type=volume
+│ → source=wrangler-config-${devcontainerId},target=/home/node/.wrangler,type=volume
+│ → source=vercel-config-${devcontainerId},target=/home/node/.vercel,type=volume
 │
 ├─ SSH keys (read-only access)
 │ → Bind mount (readonly)
