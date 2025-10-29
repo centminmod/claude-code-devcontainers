@@ -5088,7 +5088,27 @@ networks:
 # Run this after cloning the repository or rebuilding the container.
 #
 
-HOOKS_DIR="/workspaces/claude-devcontainer/.git/hooks"
+# Strict error handling
+set -euo pipefail
+
+# Dynamically resolve repository root
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+HOOKS_DIR="$REPO_ROOT/.git/hooks"
+
+# Validate git repository
+if [ ! -d "$REPO_ROOT/.git" ]; then
+    echo "❌ ERROR: Not a git repository"
+    echo "Current directory: $(pwd)"
+    echo "Expected .git at: $REPO_ROOT/.git"
+    exit 1
+fi
+
+# Validate hooks directory is writable
+if [ -d "$HOOKS_DIR" ] && [ ! -w "$HOOKS_DIR" ]; then
+    echo "❌ ERROR: Hooks directory is not writable: $HOOKS_DIR"
+    exit 1
+fi
 
 echo "=== Git Hooks Setup ==="
 echo ""
@@ -5160,7 +5180,45 @@ echo "  • Encourages feature branch workflow"
 echo ""
 ```
 
-**Step 2: Run setup script after cloning or rebuilding**:
+**Key Features of setup-git-hooks.sh**:
+
+1. **Dynamic Path Resolution**: Script automatically detects repository root regardless of clone location:
+   ```bash
+   SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+   REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+   HOOKS_DIR="$REPO_ROOT/.git/hooks"
+   ```
+   - Works with any repository path (not hard-coded to `/workspaces/claude-devcontainer`)
+   - Portable across different environments and clone locations
+   - Resolves paths relative to script location
+
+2. **Strict Error Handling**: `set -euo pipefail` ensures robust script execution:
+   - `-e`: Exit immediately if any command fails
+   - `-u`: Treat unset variables as errors
+   - `-o pipefail`: Catch failures in piped commands
+
+3. **Validation Checks**: Script validates prerequisites before installation:
+   - Verifies `.git` directory exists (ensures running in git repository)
+   - Checks hooks directory is writable (prevents permission errors)
+   - Provides clear error messages with diagnostic information
+
+**Step 2: Automatic Installation** (Recommended):
+
+The git hook is automatically installed on every container start via `postStartCommand` in `devcontainer.json`:
+
+```json
+"postStartCommand": "sudo /usr/local/bin/init-claude-config.sh && sudo /usr/local/bin/init-codex-config.sh && sudo /usr/local/bin/init-firewall.sh && bash ${containerWorkspaceFolder}/.devcontainer/setup-git-hooks.sh"
+```
+
+**Benefits**:
+- No manual installation required after container rebuild
+- Hooks always present in fresh clones
+- Consistent enforcement across team members
+- Zero-friction developer experience
+
+**Manual Installation** (if `postStartCommand` not configured):
+
+If automatic installation is not set up, run manually after cloning or rebuilding:
 
 ```bash
 # From repository root
