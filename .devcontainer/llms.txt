@@ -3769,7 +3769,7 @@ codex --version
 gemini --version
 
 # Check config directories exist
-ls -la ~/.claude ~/.codex ~/.gemini
+ls -la ~/.claude ~/.codex ~/.gemini ~/.config/gh
 ```
 
 ### Claude Code Performance Optimization for Devcontainers
@@ -3859,7 +3859,7 @@ Add to `~/.claude/settings.json` or `.devcontainer/settings.json.template`:
 set -euo pipefail
 
 # Create .claude directory if doesn't exist
-mkdir -p ~/.claude
+mkdir -p ~/.claude ~/.config/gh
 
 # Copy template to settings.json if not exists
 if [ ! -f ~/.claude/settings.json ]; then
@@ -4216,6 +4216,13 @@ if [ ! -d "$CLAUDE_HOME" ]; then
  chown node:node "$CLAUDE_HOME"
 fi
 
+# Create .config/gh directory if it doesn't exist
+GH_CONFIG="/home/node/.config/gh"
+if [ ! -d "$GH_CONFIG" ]; then
+ mkdir -p "$GH_CONFIG"
+ chown node:node "$GH_CONFIG"
+fi
+
 # Copy MCP configuration if it doesn't exist
 if [ ! -f "$MCP_FILE" ]; then
  if [ -f "$MCP_TEMPLATE" ]; then
@@ -4457,6 +4464,11 @@ fi
 
 echo "Starting firewall configuration..."
 
+# Initialize DNS resolution statistics
+TOTAL_DOMAINS=0
+RESOLVED_DOMAINS=0
+FAILED_DOMAINS=0
+
 # === IPv6 SECURITY: Disable IPv6 to prevent bypass ===
 echo "Disabling IPv6..."
 sysctl -w net.ipv6.conf.all.disable_ipv6=1 >/dev/null 2>&1 || true
@@ -4570,16 +4582,43 @@ for domain in \
  continue
  fi
 
- # Resolve domain and add all IPs
+ # Resolve domain and add all IPs with graceful error handling
+ TOTAL_DOMAINS=$((TOTAL_DOMAINS + 1))
  echo "Resolving $domain..."
  ips=$(dig +noall +answer A "$domain" | awk '$4 == "A" {print $5}')
+ if [ -z "$ips" ]; then
+ echo "WARNING: Failed to resolve $domain (continuing...)"
+ FAILED_DOMAINS=$((FAILED_DOMAINS + 1))
+ continue
+ fi
+
+ # Successfully resolved, add IPs to allowlist
+ domain_resolved=false
  while read -r ip; do
+ if [[ ! "$ip" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
+ echo "WARNING: Invalid IP from DNS for $domain: $ip (skipping)"
+ continue
+ fi
  echo "Adding $ip for $domain"
  ipset add allowed-domains "$ip" -exist
+ domain_resolved=true
  done < <(echo "$ips")
+
+ # Count as resolved only if at least one valid IP was added
+ if [ "$domain_resolved" = true ]; then
+ RESOLVED_DOMAINS=$((RESOLVED_DOMAINS + 1))
+ else
+ FAILED_DOMAINS=$((FAILED_DOMAINS + 1))
+ fi
 done
 
+echo ""
 echo "IP allowlist built successfully"
+echo "DNS Resolution Summary: ${RESOLVED_DOMAINS}/${TOTAL_DOMAINS} domains resolved successfully"
+if [ "$FAILED_DOMAINS" -gt 0 ]; then
+ echo "  WARNING: ${FAILED_DOMAINS} domains failed to resolve"
+fi
+echo ""
 
 # === Flush and rebuild iptables ===
 iptables -F && iptables -X
@@ -4696,11 +4735,12 @@ echo "Firewall state saved"
 4. **ipset for efficiency** - Much faster than individual iptables rules for 100+ domains
 5. **Dynamic IP range fetching** - Fetches official IP ranges for GitHub, Anthropic, Google, Cloudflare, AWS
 6. **AWS IP ranges** - Filtered for US regions (us-east-1, us-west-2) and EC2/CloudFront services
-7. **DNS resolution backup** - Defense-in-depth: DNS resolution for all domains (including those with IP ranges)
-8. **Docker DNS preservation** - Maintains container networking
-9. **State file** - Skips reconfiguration on container restart
-10. **Comprehensive verification** - Tests IPv6, blocked domains, GitHub, OpenRouter, Cerebras APIs
-11. **100+ whitelisted domains** - All package registries, AI APIs (OpenRouter, Cerebras, Qwen, Minimax, z.ai, Cohere, Together, Replicate, Hugging Face, Perplexity, Mistral, DeepInfra, Fireworks, Groq, Lepton, DeepSeek, 01.AI), CDNs covered
+7. **Resilient DNS resolution** - Warns on DNS failures instead of failing container startup, tracks resolution statistics (e.g., "98/102 domains resolved")
+8. **DNS resolution backup** - Defense-in-depth: DNS resolution for all domains (including those with IP ranges)
+9. **Docker DNS preservation** - Maintains container networking
+10. **State file** - Skips reconfiguration on container restart
+11. **Comprehensive verification** - Tests IPv6, blocked domains, GitHub, OpenRouter, Cerebras APIs
+12. **100+ whitelisted domains** - All package registries, AI APIs (OpenRouter, Cerebras, Qwen, Minimax, z.ai, Cohere, Together, Replicate, Hugging Face, Perplexity, Mistral, DeepInfra, Fireworks, Groq, Lepton, DeepSeek, 01.AI), CDNs covered
 
 **Dockerfile additions**:
 
@@ -6942,7 +6982,7 @@ This repository's devcontainer automatically applies this fix:
 **Manual Fix** (if needed):
 ```bash
 # Create config directory
-mkdir -p ~/.codex
+mkdir -p ~/.codex ~/.config/gh
 
 # Create config file
 cat > ~/.codex/config.toml <<EOF
@@ -7283,6 +7323,69 @@ ps aux | head -2
 - Production-like development environments
 
 **Modern devcontainer best practice**: Always include `"init": true` unless you have a specific reason not to.
+
+### 15. Setting Ownership on Subdirectory Instead of Parent Directory
+
+**Mistake**:
+```dockerfile
+# Create multiple subdirectories under .config
+RUN mkdir -p /home/node/.config/gh /home/node/.config/other && \
+  chown -R node:node /home/node/.config/gh  # Only sets ownership on subdirectory!
+```
+
+**Error**:
+```
+mkdir: cannot create directory '/home/node/.config/fish': Permission denied
+ERROR: command failed: mkdir -p /home/node/.config/fish
+```
+
+**Root Cause**:
+- `mkdir -p /home/node/.config/gh` creates both `/home/node/.config` AND `/home/node/.config/gh`
+- Parent directory `.config` is owned by root (default)
+- `chown` only sets ownership on the subdirectory (`.config/gh`)
+- Later installers (e.g., `uv` for Python) try to create their own subdirectories under `.config` (e.g., `.config/fish`)
+- Non-root user cannot create new directories in root-owned parent directory
+
+**Real-world impact**:
+- Docker build fails during tool installation (uv, fish, other shell configs)
+- Error appears late in build process, wasting time on preceding steps
+- Multiple tools affected: any installer needing to create config subdirectories
+
+**Fix**:
+```dockerfile
+# Set ownership on parent directory, not just subdirectory
+RUN mkdir -p /home/node/.config/gh /home/node/.config/other && \
+  chown -R node:node /home/node/.config  # Owns entire .config tree
+```
+
+**Why this works**:
+- `chown -R` on parent directory sets ownership recursively on all existing AND future subdirectories
+- When non-root user creates new subdirectories, they inherit proper ownership
+- Single ownership command covers all config subdirectories (gh, fish, npm, etc.)
+
+**Verification**:
+```bash
+# Check ownership of parent directory
+ls -ld /home/node/.config
+# Should show: drwxr-xr-x node node
+
+# Check ownership of subdirectories
+ls -la /home/node/.config/
+# All subdirectories should show: node node
+
+# Test creating new subdirectory as node user
+su - node -c "mkdir -p /home/node/.config/test"
+# Should succeed without permission errors
+```
+
+**Pattern to remember**:
+- ❌ `chown -R user:user /path/parent/child` (only owns child)
+- ✅ `chown -R user:user /path/parent` (owns parent + all children)
+
+**When you see this**:
+- Permission errors during `RUN` commands that create files in `~/.config`
+- Installers like `uv`, `fish`, `zsh` failing with "Permission denied"
+- Build succeeds up to a certain point, then fails on config directory creation
 
 ---
 
