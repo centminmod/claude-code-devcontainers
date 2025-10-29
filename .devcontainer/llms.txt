@@ -32,8 +32,13 @@ cat > .devcontainer/devcontainer.json << 'EOF'
  "postCreateCommand": "npm install -g @anthropic-ai/claude-code@latest",
  "remoteUser": "node",
  "mounts": [
+  "source=claude-code-bashhistory-${devcontainerId},target=/commandhistory,type=volume",
   "source=claude-${devcontainerId},target=/home/node/.claude,type=volume",
-  "source=ghub-config-${devcontainerId},target=/home/node/.config/gh,type=volume"
+  "source=codex-config-${devcontainerId},target=/home/node/.codex,type=volume",
+  "source=gemini-config-${devcontainerId},target=/home/node/.gemini,type=volume",
+  "source=ghub-config-${devcontainerId},target=/home/node/.config/gh,type=volume",
+  "source=npm-global-${devcontainerId},target=/home/node/.npm-global,type=volume"
+  // Add your own: "source=<tool>-${devcontainerId},target=<path>,type=volume"
  ]
 }
 EOF
@@ -6079,6 +6084,128 @@ Volumes ensure configuration persists across container rebuilds.
  ]
 }
 ```
+
+### Customizing Persistent Mounts for Your Tools
+
+Users should customize the `mounts` array to persist ANY tool configuration they need. Follow the pattern:
+
+**Pattern**:
+```
+source=<tool-name>-${devcontainerId},target=/home/<user>/<config-path>,type=volume
+```
+
+**Universal volumes** (every devcontainer should have):
+- `claude-code-bashhistory` → `/commandhistory` - Command history
+- `claude-config` → `/home/{user}/.claude` - Claude Code config
+- `ghub-config` → `/home/{user}/.config/gh` - GitHub CLI auth
+
+**Language/Runtime volumes** (add based on your stack):
+
+**Node.js/JavaScript/TypeScript**:
+- `npm-global` → `/home/node/.npm-global` - Global npm packages (npm install -g)
+- `yarn-cache` → `/home/node/.yarn` - Yarn cache
+
+**Python**:
+- `pip-cache` → `/home/{user}/.cache/pip` - pip package cache
+- `poetry-config` → `/home/{user}/.config/pypoetry` - Poetry config
+- `jupyter-config` → `/home/{user}/.jupyter` - Jupyter notebooks
+
+**Rust**:
+- `cargo` → `/home/{user}/.cargo` - Cargo packages (also used by Python uv)
+
+**Go**:
+- `go-pkg` → `/go/pkg` - Go module cache
+
+**Ruby**:
+- `gem` → `/home/{user}/.gem` - Ruby gems
+
+**Java/JVM**:
+- `maven` → `/home/{user}/.m2` - Maven packages
+- `gradle` → `/home/{user}/.gradle` - Gradle cache
+
+**Multi-AI volumes** (for multi-assistant workflows):
+- `codex-config` → `/home/{user}/.codex` - OpenAI Codex config
+- `gemini-config` → `/home/{user}/.gemini` - Google Gemini config
+
+**Alternative runtimes**:
+- `bun` → `/home/{user}/.bun` - Bun runtime
+
+**Development tool volumes**:
+
+**Container/Orchestration**:
+- `docker-config` → `/home/{user}/.docker` - Docker CLI config
+- `kubectl-config` → `/home/{user}/.kube` - Kubernetes config
+
+**Infrastructure as Code**:
+- `terraform` → `/home/{user}/.terraform.d` - Terraform plugins
+- `ansible` → `/home/{user}/.ansible` - Ansible config
+- `pulumi` → `/home/{user}/.pulumi` - Pulumi state
+
+**Cloud Providers**:
+- `aws-config` → `/home/{user}/.aws` - AWS CLI credentials
+- `gcloud-config` → `/home/{user}/.config/gcloud` - Google Cloud SDK
+- `azure-config` → `/home/{user}/.azure` - Azure CLI
+- `digitalocean` → `/home/{user}/.config/doctl` - DigitalOcean CLI
+
+**Database CLI tools**:
+- `psql-config` → `/home/{user}/.psqlrc` and `/home/{user}/.pgpass` - PostgreSQL
+- `mysql-config` → `/home/{user}/.my.cnf` - MySQL
+- `redis-config` → `/home/{user}/.redisclirc` - Redis CLI
+- `mongo-config` → `/home/{user}/.mongorc.js` - MongoDB shell
+
+**Testing/Browser automation**:
+- `playwright` → `/home/{user}/.cache/ms-playwright` - Playwright browsers
+- `puppeteer` → `/home/{user}/.cache/puppeteer` - Puppeteer browsers
+- `cypress` → `/home/{user}/.cache/Cypress` - Cypress
+
+**Build caches**:
+- `turborepo` → `/home/{user}/.turbo` - Turborepo cache
+- `nx` → `/home/{user}/.nx` - Nx cache
+- `bazel` → `/home/{user}/.cache/bazel` - Bazel build cache
+
+**Version managers**:
+- `nvm` → `/home/{user}/.nvm` - Node Version Manager
+- `rvm` → `/home/{user}/.rvm` - Ruby Version Manager
+- `pyenv` → `/home/{user}/.pyenv` - Python version manager
+
+**Example: Full Node.js + Infrastructure setup**:
+```json
+{
+ "mounts": [
+ // Universal
+ "source=claude-code-bashhistory-${devcontainerId},target=/commandhistory,type=volume",
+ "source=claude-config-${devcontainerId},target=/home/node/.claude,type=volume",
+ "source=ghub-config-${devcontainerId},target=/home/node/.config/gh,type=volume",
+
+ // Multi-AI
+ "source=codex-config-${devcontainerId},target=/home/node/.codex,type=volume",
+ "source=gemini-config-${devcontainerId},target=/home/node/.gemini,type=volume",
+
+ // Node.js
+ "source=npm-global-${devcontainerId},target=/home/node/.npm-global,type=volume",
+
+ // Cloud/Infrastructure
+ "source=docker-config-${devcontainerId},target=/home/node/.docker,type=volume",
+ "source=kubectl-config-${devcontainerId},target=/home/node/.kube,type=volume",
+ "source=aws-config-${devcontainerId},target=/home/node/.aws,type=volume",
+
+ // Testing
+ "source=playwright-${devcontainerId},target=/home/node/.cache/ms-playwright,type=volume"
+ ]
+}
+```
+
+**Finding config locations**:
+1. Check tool's documentation for config directory
+2. Look for dotfiles in home: `ls -la ~/`
+3. Use tool's debug/verbose mode to see config paths
+4. Common pattern: `~/.config/<tool>` or `~/.<tool>` or `~/.cache/<tool>`
+
+**Pro tips**:
+- Use `${devcontainerId}` for isolation between projects
+- Adjust paths for your user (`node` vs `vscode` vs custom)
+- Mount as `type=volume` for persistence, `type=bind` for host access
+- Add `readonly` for security: `type=bind,readonly`
 
 ### Inspecting and Managing Volumes
 
