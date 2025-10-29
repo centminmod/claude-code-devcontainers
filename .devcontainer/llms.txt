@@ -5300,6 +5300,56 @@ git branch -D feature/test-hook
 rm /tmp/test-hook.txt
 ```
 
+#### Pre-Work Sync Check (MANDATORY)
+
+**Before creating any new branch**, ALWAYS ensure master is up-to-date with remote:
+
+```bash
+# 1. Switch to master
+git checkout master
+
+# 2. Fetch latest (safe, doesn't merge)
+git fetch origin
+
+# 3. Check status
+git status
+```
+
+**Status interpretations and actions**:
+
+✅ **"Your branch is up to date with 'origin/master'"** → Proceed with branch creation
+
+⚠️ **"Your branch is behind 'origin/master' by X commits"** → Pull first:
+```bash
+git pull origin master
+git status  # Verify now "up to date"
+```
+
+❌ **"Your branch and 'origin/master' have diverged"** → Resolve divergence:
+```bash
+# Option 1: No local commits (safe reset)
+git reset --hard origin/master
+
+# Option 2: Have local commits (merge/rebase)
+git pull origin master  # Creates merge commit
+# OR
+git rebase origin/master  # Linear history
+```
+
+**Why this matters**:
+- Ensures branches start from latest code
+- Reduces merge conflicts later
+- Prevents building on outdated codebase
+- Maintains clean git history
+
+**Only after master is up-to-date**, create your branch:
+
+```bash
+git checkout -b feature/your-feature-name
+# OR
+git checkout -b session/$(date +%Y%m%d-%H%M)-description
+```
+
 #### Branch Naming Conventions
 
 **Feature branches** (long-term work):
