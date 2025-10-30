@@ -470,7 +470,7 @@ This setup includes all essential components for real-world development projects
 | **MCP Servers** | [NO] None configured | [YES] 3+ servers (context7, cf-docs, chrome-devtools) |
 | **Git Safety** | [NO] No protection | [YES] Pre-commit hooks block main/master commits |
 | **Volume Mounts** | 6 basic volumes | 11+ volumes (complete persistence) |
-| **Installation Method** | postCreateCommand (loses on rebuild) | Dockerfile RUN (persists) |
+| **Installation Method** | postCreateCommand (basic) | Hybrid: Dockerfile RUN (system) + postCreateCommand (volumes) |
 | **Multi-AI** | [NO] No support | [YES] Claude + Codex + Gemini configured |
 | **Build Time** | 5-10 min | 30-45 min first time, <2 min cached |
 | **Production Ready** | [NO] No | [YES] Yes |
@@ -3851,9 +3851,10 @@ Once your devcontainer is working:
 > - 5 lifecycle hooks execute in strict order: initializeCommand → onCreateCommand → updateContentCommand → postCreateCommand → postStartCommand
 > - initializeCommand runs on host (before container exists) - use for local file prep
 > - onCreateCommand runs once at container creation (no user secrets) - use for system packages in Dockerfile
-> - postCreateCommand runs after container ready (has user secrets) - use for CLI tool installations
+> - postCreateCommand runs after container ready + volumes mounted (has user secrets) - use for CLI tool installations to VOLUME-PERSISTED directories (e.g., npm -g to ~/.npm-global)
 > - postStartCommand runs every container start - use for service initialization
 > - Use execution order diagram below when debugging initialization issues
+> - **CRITICAL**: postCreateCommand runs AFTER volumes mount - this is why it's RECOMMENDED for npm -g installations (avoids volume overlay conflicts)
 
 > **AI Assistant Guidance**: Understanding lifecycle hooks is critical for proper devcontainer configuration. Use this execution order diagram when helping users debug initialization issues.
 
@@ -4334,6 +4335,309 @@ docker rm <container-id>
 docker volume ls | grep "your-project" # Find volumes
 docker volume rm <volume-name>
 ```
+
+---
+
+## Installation Patterns: System vs Volume-Persisted Tools
+
+> **For AI Assistants**: Understanding installation patterns is CRITICAL. The "Dockerfile vs postCreateCommand" decision depends on whether the target path is volume-mounted. postCreateCommand + volumes is the RECOMMENDED pattern for npm global packages.
+
+### The Volume Persistence Problem
+
+Development containers face a unique challenge: **when should tools be installed?**
+
+**The Issue**:
+- Dockerfile builds happen BEFORE volumes mount
+- Volume mounts overlay directories AFTER container starts
+- Installing to a path that later gets volume-mounted causes conflicts
+
+**Example Conflict**:
+```dockerfile
+# Dockerfile (WRONG for volume-persisted paths)
+USER node
+RUN npm install -g @anthropic-ai/claude-code
+# Installs to /home/node/.npm-global
+```
+
+```json
+// devcontainer.json
+{
+  "mounts": [
+    "source=npm-global-${devcontainerId},target=/home/node/.npm-global,type=volume"
+  ]
+}
+```
+
+**What happens**:
+1. Dockerfile installs Claude Code to `/home/node/.npm-global` (in image layer)
+2. Container starts, volume mounts OVER `/home/node/.npm-global`
+3. Installation is hidden/lost (volume overlays the directory)
+4. Result: Claude Code not found, despite being in the image
+
+### Pattern 1: Dockerfile RUN (System-Level Tools)
+
+**Use for**: System packages, tools in non-volume paths
+
+```dockerfile
+# System packages (as root)
+USER root
+RUN apt-get update && apt-get install -y \
+    git \
+    curl \
+    wget \
+    build-essential
+
+# CLI tools to system paths
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
+    mv /root/.local/bin/uv /usr/local/bin/uv
+```
+
+**Characteristics**:
+- [YES] Baked into image layers (Docker caching)
+- [YES] Fast rebuilds (layers cached)
+- [YES] Works offline after first build
+- [YES] No reinstall on container restart
+- [NO] Cannot install to volume-persisted directories
+- [NO] Conflicts if path later volume-mounted
+
+**Best for**:
+- System packages (git, curl, build-essential)
+- Binaries to /usr/bin, /usr/local/bin
+- Tools without user-specific config
+
+### Pattern 2: postCreateCommand (Volume-Persisted Tools) [RECOMMENDED for npm -g]
+
+**Use for**: npm global packages, tools to volume-mounted directories
+
+```json
+{
+  "mounts": [
+    "source=npm-global-${devcontainerId},target=/home/node/.npm-global,type=volume",
+    "source=claude-config-${devcontainerId},target=/home/node/.claude,type=volume"
+  ],
+  "postCreateCommand": "npm install -g @anthropic-ai/claude-code@latest && npm install -g @openai/codex && npm install -g @google/gemini-cli"
+}
+```
+
+**Why This Works**:
+1. Dockerfile builds image (volumes NOT mounted yet)
+2. Container starts
+3. Volumes mount to `/home/node/.npm-global`, `/home/node/.claude`
+4. **postCreateCommand runs** → installs to volume-mounted directories
+5. Tools persist via volume (survive rebuilds)
+
+**Characteristics**:
+- [YES] No conflicts with volume mounts
+- [YES] Clean reinstalls when adding new volumes
+- [YES] Tools persist via volume (not lost)
+- [YES] More robust for npm global packages
+- [NO] Slower (reinstalls on container creation)
+- [NO] No Docker layer caching
+- [NO] Requires network on every create
+
+**Best for**:
+- npm/yarn/pnpm global packages (`npm install -g`)
+- Tools installed to ~/.npm-global, ~/.local/bin (volumes)
+- CLI tools requiring user-specific configs
+- Installations needing mounted credentials
+
+**Real-World Example** (Generic Pattern from Production Use):
+
+```dockerfile
+# Dockerfile
+FROM node:22
+
+# System packages (Dockerfile RUN - correct)
+USER root
+RUN apt-get update && apt-get install -y git curl wget
+
+# Create config directories (but don't install tools yet)
+RUN mkdir -p /home/node/.npm-global /home/node/.claude /home/node/.codex
+
+# Set ownership
+RUN chown -R node:node /home/node/.npm-global /home/node/.claude /home/node/.codex
+
+USER node
+
+# Note: npm global packages NOT installed here
+# They install via postCreateCommand (after volumes mount)
+```
+
+```json
+// devcontainer.json
+{
+  "mounts": [
+    "source=npm-global-${devcontainerId},target=/home/node/.npm-global,type=volume",
+    "source=claude-config-${devcontainerId},target=/home/node/.claude,type=volume",
+    "source=codex-config-${devcontainerId},target=/home/node/.codex,type=volume"
+  ],
+  "postCreateCommand": "npm install -g npm@latest && npm install -g @anthropic-ai/claude-code@latest && npm install -g @openai/codex && npm install -g @google/gemini-cli",
+  "postStartCommand": "sudo /usr/local/bin/init-claude-config.sh"
+}
+```
+
+**Why This Approach is Superior for npm Packages**:
+- No version conflicts between image layers and volumes
+- Adding new volumes triggers clean reinstall
+- Tools persist across rebuilds via volume
+- Avoids complex Dockerfile workarounds
+- Matches npm's expected behavior (user-global installs)
+
+### Pattern 3: Hybrid Approach (Recommended Best Practice)
+
+**Combine both patterns** based on tool persistence needs:
+
+```dockerfile
+# Dockerfile - System-level tools
+USER root
+RUN apt-get install -y git curl wget build-essential
+
+# Tools to system paths (not volume-mounted)
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
+    mv /root/.local/bin/uv /usr/local/bin/uv
+
+USER node
+
+# Prepare directories (volumes mount here later)
+RUN mkdir -p /home/node/.npm-global /home/node/.local/bin
+```
+
+```json
+{
+  "mounts": [
+    "source=npm-global-${devcontainerId},target=/home/node/.npm-global,type=volume",
+    "source=local-bin-${devcontainerId},target=/home/node/.local,type=volume"
+  ],
+  "postCreateCommand": "npm install -g @anthropic-ai/claude-code@latest",
+  "postStartCommand": "sudo /usr/local/bin/init-firewall.sh"
+}
+```
+
+### Decision Matrix: When to Use Each Pattern
+
+| Tool/Package | Target Path | Method | Reason |
+|--------------|-------------|--------|--------|
+| git, curl, wget | /usr/bin | Dockerfile RUN | System packages, not volume-mounted |
+| build-essential | /usr/lib | Dockerfile RUN | System libraries, not volume-mounted |
+| UV (Python) | /usr/local/bin | Dockerfile RUN | Single binary, system path |
+| AWS CLI | ~/.local/bin (volume) | Dockerfile RUN + volume | Installer handles volumes correctly |
+| **Claude Code** | **~/.npm-global (volume)** | **postCreateCommand** | **npm -g to volume path** |
+| **Codex CLI** | **~/.npm-global (volume)** | **postCreateCommand** | **npm -g to volume path** |
+| **Gemini CLI** | **~/.npm-global (volume)** | **postCreateCommand** | **npm -g to volume path** |
+| Wrangler | ~/.npm-global (volume) | postCreateCommand | npm -g to volume path |
+| Vercel CLI | ~/.npm-global (volume) | postCreateCommand | npm -g to volume path |
+| Bun | ~/.bun (volume) | Dockerfile RUN + volume | Installer handles volumes |
+| Init scripts | N/A | postStartCommand | Run every start (not install) |
+
+**Key Decision Points**:
+
+1. **Is the path volume-mounted?**
+   - YES → Use postCreateCommand
+   - NO → Use Dockerfile RUN
+
+2. **Is it an npm global package?**
+   - YES → Use postCreateCommand (installs to ~/.npm-global)
+   - NO → Check if path is volume-mounted
+
+3. **Is it a system package (apt-get)?**
+   - YES → Always use Dockerfile RUN
+   - NO → Check target path
+
+### Common Mistakes and Solutions
+
+#### Mistake 1: Installing npm -g in Dockerfile to Volume Path
+
+**Wrong**:
+```dockerfile
+USER node
+RUN npm install -g @anthropic-ai/claude-code
+# Installs to ~/.npm-global (will be volume-mounted)
+```
+
+**Problem**: Volume mounts AFTER build, hiding the installation
+
+**Fix**: Use postCreateCommand
+```json
+{
+  "postCreateCommand": "npm install -g @anthropic-ai/claude-code@latest"
+}
+```
+
+#### Mistake 2: Thinking postCreateCommand "Loses Tools"
+
+**Wrong assumption**: "postCreateCommand loses tools on rebuild because it's not in the image"
+
+**Reality**: Tools persist via VOLUME, not image layers
+- Tools installed to ~/.npm-global
+- ~/.npm-global is volume-mounted
+- Volume persists across rebuilds
+- Tools NOT lost
+
+#### Mistake 3: Always Using Dockerfile RUN
+
+**Wrong**: Installing ALL tools via Dockerfile RUN (including npm -g)
+
+**Problem**: Conflicts when paths are volume-mounted
+
+**Fix**: Use hybrid approach
+- System tools → Dockerfile RUN
+- npm global packages → postCreateCommand
+
+#### Mistake 4: Always Using postCreateCommand
+
+**Wrong**: Installing system packages via postCreateCommand
+```json
+{
+  "postCreateCommand": "sudo apt-get install -y git curl"
+}
+```
+
+**Problem**: Slower (no caching), runs as user (sudo needed), not best practice
+
+**Fix**: System packages in Dockerfile
+```dockerfile
+USER root
+RUN apt-get install -y git curl
+```
+
+### Troubleshooting
+
+**Problem**: CLI tool not found after rebuild
+
+**Diagnosis**:
+```bash
+# Check if path is volume-mounted
+mount | grep npm-global
+
+# Check if tool is in image or volume
+docker exec -it <container> ls -la /home/node/.npm-global/bin
+```
+
+**Solution**: If path is volume-mounted, move installation to postCreateCommand
+
+**Problem**: Slow container creation (reinstalling tools)
+
+**Diagnosis**: Too many tools in postCreateCommand
+
+**Solution**: Move system tools to Dockerfile, keep only volume-persisted tools in postCreateCommand
+
+### Summary: Recommended Pattern for AI CLI Tools
+
+For AI development containers with Claude Code, Codex, Gemini:
+
+**[YES] DO: Use postCreateCommand for npm global packages**
+```json
+{
+  "mounts": [
+    "source=npm-global-${devcontainerId},target=/home/node/.npm-global,type=volume"
+  ],
+  "postCreateCommand": "npm install -g @anthropic-ai/claude-code@latest && npm install -g @openai/codex && npm install -g @google/gemini-cli"
+}
+```
+
+**[NO] DON'T: Install npm -g in Dockerfile when path is volume-mounted**
+
+**Why**: This pattern is MORE ROBUST for production use with volume-persisted configurations.
 
 ---
 
@@ -8544,6 +8848,37 @@ Host in a git repo and reference:
 
 ---
 
+#### Misinterpretation #8: postCreateCommand Installations Are Wrong (Should Always Use Dockerfile)
+
+[NO] **Wrong**: CLI tools should always be installed in Dockerfile RUN commands. postCreateCommand installations are lost on rebuild and are incorrect.
+
+[YES] **Right**: Installation method depends on target path. For volume-persisted directories (e.g., `~/.npm-global`), postCreateCommand is RECOMMENDED and is the production-tested pattern used in this repository.
+
+**Why it matters**: Volumes mount AFTER Dockerfile build. Installing to a volume-mounted path in Dockerfile creates an overlay conflict where the volume hides the installation. postCreateCommand runs AFTER volumes mount, installing directly to persistent storage.
+
+**Real-world example** (Production Pattern):
+```dockerfile
+# Dockerfile - Create directories but DON'T install npm packages yet
+RUN mkdir -p /home/node/.npm-global && chown -R node:node /home/node/.npm-global
+# npm -g installations happen via postCreateCommand (after volumes mount)
+```
+
+```json
+// devcontainer.json
+{
+  "mounts": [
+    "source=npm-global-${devcontainerId},target=/home/node/.npm-global,type=volume"
+  ],
+  "postCreateCommand": "npm install -g @anthropic-ai/claude-code @openai/codex"
+}
+```
+
+**Decision rule**: Is target directory volume-mounted? → Use postCreateCommand. Is target a system path? → Use Dockerfile RUN.
+
+**Reference**: [Installation Patterns: System vs Volume-Persisted Tools](#installation-patterns-system-vs-volume-persisted-tools)
+
+---
+
 ### Self-Check Questions Before Responding
 
 Before providing a devcontainer configuration, ask yourself:
@@ -8552,7 +8887,7 @@ Before providing a devcontainer configuration, ask yourself:
 2. [YES] **Does my response configure MCP servers?** (At minimum: context7, cf-docs)
 3. [YES] **Does my response include git hooks (setup-git-hooks.sh)?** (Prevents accidental commits to main)
 4. [YES] **Does my response have 11+ volume mounts?** (Full persistence: .claude, .codex, .gemini, .config/gh, .aws, .local, .wrangler, .vercel, .npm-global, bash history, SSH keys)
-5. [YES] **Does my response use Dockerfile RUN commands?** (Not just postCreateCommand which loses on rebuild)
+5. [YES] **Does my response use appropriate installation method?** (Hybrid: Dockerfile RUN for system, postCreateCommand for volume-persisted npm -g)
 6. [YES] **Does my response include non-root user (remoteUser: "node")?** (Security best practice)
 7. [YES] **Did I explain WHY, not just WHAT?** (Helps users understand, not just copy-paste)
 
@@ -8632,11 +8967,26 @@ Use this checklist to verify your devcontainer includes all essential production
   - All volumes use `type=volume` (NOT bind mounts for sensitive data)
 
 **Installation Method:**
-- [ ] **Dockerfile RUN Commands** (not postCreateCommand)
-  - System packages installed via `apt-get` in Dockerfile (as root)
-  - CLI tools installed via `npm install -g` in Dockerfile (as user)
-  - postCreateCommand only used for initialization scripts (not installations)
-  - Ensures tools persist across container rebuilds
+- [ ] **Choose Pattern Based on Target Path** (Hybrid approach recommended)
+
+  **Option A - Dockerfile RUN** (for non-volume-persisted paths):
+  - System packages: `apt-get` in Dockerfile (as root)
+  - CLI tools to system paths: Dockerfile RUN (as user)
+  - [YES] Pros: Baked into image, faster rebuilds (cached), guaranteed present
+  - [NO] Cons: Cannot install to volume-persisted directories (volumes mount AFTER build)
+
+  **Option B - postCreateCommand** (for volume-persisted paths - RECOMMENDED for npm -g):
+  - npm packages to `~/.npm-global` (volume-mounted directory)
+  - Runs AFTER volumes mount, preventing installation/volume conflicts
+  - [YES] Pros: Works with volume persistence, clean reinstalls on updates, no overlay issues
+  - [NO] Cons: Runs on every container creation (slower startup)
+  - [YES] Example: Production pattern used in this repository
+  - See "Installation Patterns: System vs Volume-Persisted Tools" for complete explanation
+
+  **Hybrid Approach** (Recommended):
+  - System tools → Dockerfile RUN
+  - Volume-persisted tools → postCreateCommand
+  - Init scripts → postStartCommand
 
 ### Recommended Components (Should Have)
 
@@ -9155,22 +9505,41 @@ claude --verbose
 
 **What is correct approach?**
 
-**Correct Answer**: Install in Dockerfile RUN (not postCreateCommand)
+**Correct Answer**: Depends on the target installation path
 
-**Why**: Dockerfile RUN bakes into image layers (persists, cached). postCreateCommand runs after creation (lost on rebuild, no caching).
+**Decision Rule**: Is the target directory volume-mounted?
 
-**Pattern**:
+- [NO] **Not volume-mounted** (e.g., `/usr/local/bin`, system paths) → **Dockerfile RUN**
+  - Why: Bakes into image layers (persists, cached, guaranteed present)
+  - Example: System packages (`apt-get`), system-wide binaries
+
+- [YES] **Volume-mounted** (e.g., `~/.npm-global`, `~/.cargo`) → **postCreateCommand**
+  - Why: Volumes mount AFTER Dockerfile build (avoids overlay conflicts)
+  - Example: `npm install -g` to volume-persisted directory
+  - This is the production-tested pattern used in this repository
+
+**Pattern A - Dockerfile RUN** (non-volume paths):
 ```dockerfile
 USER root
-RUN apt-get install -y git curl  # System packages
+RUN apt-get install -y git curl  # System packages (to /usr/bin)
 
 USER node
-RUN npm install -g claude codex  # CLI tools
+RUN curl https://example.com/tool | bash -s -- --prefix /usr/local
 ```
 
-**postCreateCommand**: Only for init scripts (firewall, config copy)
+**Pattern B - postCreateCommand** (volume-persisted paths):
+```json
+{
+  "mounts": [
+    "source=npm-global-${devcontainerId},target=/home/node/.npm-global,type=volume"
+  ],
+  "postCreateCommand": "npm install -g @anthropic-ai/claude-code @openai/codex"
+}
+```
 
-**Reference**: [Lifecycle Hooks](#lifecycle-hooks-explained-recommended)
+**Why postCreateCommand works for volumes**: Runs AFTER mounts are in place, installing directly to persisted storage.
+
+**Reference**: [Installation Patterns: System vs Volume-Persisted Tools](#installation-patterns-system-vs-volume-persisted-tools)
 
 ---
 
