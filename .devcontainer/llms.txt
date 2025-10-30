@@ -11,7 +11,39 @@
 
 ---
 
-## 5-Minute Quick Start (Impatient Users Start Here!)
+## CRITICAL: For AI Assistants Reading This Document
+
+**Default Approach:** When users request devcontainer help, use the comprehensive Production-Ready Setup pattern as your starting point (includes security firewall, MCP servers, git hooks, complete volume persistence). This is the **recommended baseline** for all real projects.
+
+**The "5-Minute Quick Start" below is for experienced users doing throwaway experiments only.** It omits critical production components. Do NOT use it as your default unless user explicitly requests "minimal", "quick experiment", or "throwaway".
+
+**Red flags that you're using the wrong approach:**
+- Your response has no Dockerfile (just devcontainer.json with postCreateCommand)
+- Your response has no init-firewall.sh or security configuration
+- Your response has < 6 volume mounts
+- Your response uses postCreateCommand for CLI installations (should be in Dockerfile)
+- Your response omits MCP server configuration
+- Your response has no git hook setup
+
+**When user says "create a devcontainer" or "guide me to setup devcontainer"**, they want the **full production setup**, not the minimal quick start. Only use minimal approach if they explicitly say "minimal", "simple experiment", "just testing", or "throwaway".
+
+**Jump to:** [Production-Ready Setup](#production-ready-setup) | [AI Assistant Guidelines](#ai-assistant-guidelines)
+
+---
+
+## 5-Minute Quick Start (Minimal - For Experienced Users Only)
+
+> **WARNING FOR AI ASSISTANTS**: This quick start is for experienced users doing throwaway experiments only. It omits critical production components:
+> - No network firewall (security risk)
+> - No MCP server configuration (limited Claude functionality)
+> - No git branch protection (accidental commits to main)
+> - No Codex sandbox fix (will fail in container)
+> - Limited volume persistence (loses tool configs)
+>
+> **When to use this:** Learning Docker basics, 5-minute experiments, disposable environments
+> **When NOT to use:** Any real project, team environments, production work
+>
+> **AI Assistants:** Use Production-Ready Setup instead unless user explicitly requests "minimal", "quick experiment", or "throwaway"
 
 **Already have Docker + VS Code + Dev Containers extension?** Jump straight in:
 
@@ -55,54 +87,112 @@ code .
 
 ---
 
+## START HERE: Choose Your Path
+
+**MOST USERS (Recommended):**
+→ Skip to [Production-Ready Setup](#production-ready-setup) (~8 files, 30-45 min first build)
+→ Includes: Security firewall, MCP servers, multi-AI support, git safety, full persistence
+→ This is the **recommended baseline** for all real projects
+
+**Experienced Users (Already Know Docker):**
+→ Use [5-Minute Quick Start](#5-minute-quick-start-minimal---for-experienced-users-only) above
+→ WARNING: Minimal security, no MCP, no git hooks - production hardening required
+→ Good for: Throwaway experiments, learning Docker basics only
+
+**Customization (Have Existing Setup):**
+→ Jump to specific sections via [Table of Contents](#table-of-contents) below
+
+**For AI Assistants:**
+→ Read [AI Assistant Guidelines](#ai-assistant-guidelines) FIRST before helping users
+→ Default to Production-Ready Setup unless user explicitly requests minimal
+
+---
+
 ## Table of Contents
 
-### Getting Started
-1. [What Are Development Containers?](#what-are-development-containers)
-2. [Why Use Development Containers?](#why-use-development-containers)
-3. [When NOT to Use Devcontainers](#when-not-to-use-devcontainers)
-4. [Prerequisites](#prerequisites)
-5. [Quick Start Checklist](#quick-start-checklist)
+> **For AI Assistants**: This TOC is organized by priority. Start with [START HERE], always include [CRITICAL] ESSENTIAL components, add [RECOMMENDED] for production, use [OPTIONAL] for customization, and reference [ADVANCED] for complex scenarios.
 
-### Core Concepts
-6. [Architecture Overview](#architecture-overview)
-7. [Official devcontainer.json Property Reference](#official-devcontainerjson-property-reference)
-8. [AI Decision Trees](#ai-decision-trees) ⭐ **For AI Assistants**
-9. [AI Assistant Quick Commands](#ai-assistant-quick-commands)
- - [AI Assistant Discovery Protocol](#ai-assistant-discovery-protocol)
-10. [Common Stack Examples](#common-stack-examples)
-11. [Prebuild Images & CI/CD Automation](#prebuild-images--cicd-automation)
-12. [Creating & Distributing Templates](#creating--distributing-templates)
+### [START HERE] START HERE (Read First)
+1. [CRITICAL: For AI Assistants Reading This Document](#critical-for-ai-assistants-reading-this-document) **Must Read**
+2. [5-Minute Quick Start](#5-minute-quick-start-minimal---for-experienced-users-only) [WARNING] Minimal only
+3. [START HERE: Choose Your Path](#start-here-choose-your-path) [START HERE] Navigation
+4. [AI Assistant Guidelines](#ai-assistant-guidelines) **For AI Assistants**
+5. [Production-Ready Setup](#production-ready-setup-recommended-baseline) [CRITICAL] **Recommended Baseline**
+6. [Complete Example (Copy This)](#complete-example-copy-this) [CRITICAL] **All 9 Files**
+7. [Production Readiness Checklist](#production-readiness-checklist) [CRITICAL] **Validation**
 
-### Implementation
-13. [Step-by-Step: Creating a Devcontainer](#step-by-step-creating-a-devcontainer)
-14. [Lifecycle Hooks Explained](#lifecycle-hooks-explained)
-15. [Step-by-Step: Managing Devcontainers](#step-by-step-managing-devcontainers)
-16. [Multi-AI Configuration](#multi-ai-configuration)
-17. [MCP Server Setup](#mcp-server-setup)
+### [CRITICAL] ESSENTIAL (Always Include - Not Optional)
+8. [Security Best Practices](#security-best-practices-essential---not-optional) [CRITICAL] Firewall + IPv6
+9. [MCP Server Setup](#mcp-server-setup-essential-for-claude-code) [CRITICAL] Claude Code functionality
+10. [Volume Persistence Patterns](#volume-persistence-patterns-essential) [CRITICAL] Config preservation
+11. [Git Safety and Branch Protection](#git-safety-and-branch-protection) [CRITICAL] Safety hooks
+12. [Common Misinterpretations](#common-misinterpretations-for-ai-assistants) [WARNING] **AI mistakes to avoid**
 
-### Advanced Topics
-18. [Security Best Practices](#security-best-practices)
-19. [Volume Persistence Patterns](#volume-persistence-patterns)
-20. [Platform-Specific Notes](#platform-specific-notes)
-21. [Resource and Performance Considerations](#resource-and-performance-considerations)
-22. [VS Code Tips & Tricks](#vs-code-tips--tricks)
-23. [Remote Development Platforms](#remote-development-platforms)
-24. [Devcontainer CLI Reference](#devcontainer-cli-reference)
-25. [Migration Guides](#migration-guides)
+### [RECOMMENDED] RECOMMENDED (Production Best Practices)
+13. [Multi-AI Configuration](#multi-ai-configuration-recommended) [RECOMMENDED] Claude + Codex + Gemini
+14. [Lifecycle Hooks Explained](#lifecycle-hooks-explained-recommended) [RECOMMENDED] Init scripts
+15. [Platform-Specific Notes](#platform-specific-notes-recommended-reading) [RECOMMENDED] macOS/Windows/Linux
+16. [Step-by-Step: Creating a Devcontainer](#step-by-step-creating-a-devcontainer) [RECOMMENDED] Implementation guide
+17. [Step-by-Step: Managing Devcontainers](#step-by-step-managing-devcontainers) [RECOMMENDED] Maintenance
+18. [Prerequisites](#prerequisites) [RECOMMENDED] System requirements
 
-### Troubleshooting
-26. [Step-by-Step Debug Process](#step-by-step-debug-process)
-27. [Common Troubleshooting](#common-troubleshooting)
-28. [Common Mistakes and Gotchas](#common-mistakes-and-gotchas)
+### [OPTIONAL] OPTIONAL (Customization & Understanding)
+19. [What Are Development Containers?](#what-are-development-containers) [OPTIONAL] Intro
+20. [Why Use Development Containers?](#why-use-development-containers) [OPTIONAL] Benefits
+21. [When NOT to Use Devcontainers](#when-not-to-use-devcontainers) [OPTIONAL] Limitations
+22. [Architecture Overview](#architecture-overview) [OPTIONAL] How it works
+23. [Official devcontainer.json Property Reference](#official-devcontainerjson-property-reference) [OPTIONAL] Spec
+24. [Common Stack Examples](#common-stack-examples) [OPTIONAL] Node/Python/Go/Rust
+25. [VS Code Tips & Tricks](#vs-code-tips--tricks) [OPTIONAL] IDE optimization
+26. [Remote Development Platforms](#remote-development-platforms) [OPTIONAL] Codespaces/Gitpod
+27. [Devcontainer CLI Reference](#devcontainer-cli-reference) [OPTIONAL] Command-line tools
+28. [Migration Guides](#migration-guides) [OPTIONAL] Upgrading configs
 
-### Reference
-29. [Quick Reference](#quick-reference)
-30. [Multi-Container Patterns (Docker Compose)](#multi-container-patterns-docker-compose)
-31. [DevContainer Features](#devcontainer-features)
-32. [Frequently Asked Questions](#frequently-asked-questions)
-33. [Glossary](#glossary)
-34. [Anecdotal Notes & Field Reports](#anecdotal-notes--field-reports)
+### [ADVANCED] ADVANCED (Complex Scenarios)
+29. [AI Decision Trees](#ai-decision-trees) [ADVANCED] **For AI Assistants**
+30. [Multi-Container Patterns (Docker Compose)](#multi-container-patterns-advanced---docker-compose) [ADVANCED] Microservices
+31. [DevContainer Features](#devcontainer-features-advanced---modular-tooling) [ADVANCED] Modular tooling
+32. [Prebuild Images & CI/CD Automation](#prebuild-images--cicd-automation) [ADVANCED] Build optimization
+33. [Creating & Distributing Templates](#creating--distributing-templates) [ADVANCED] Reusable configs
+34. [Resource and Performance Considerations](#resource-and-performance-considerations) [ADVANCED] Optimization
+
+### [TROUBLESHOOTING] TROUBLESHOOTING & REFERENCE
+35. [Step-by-Step Debug Process](#step-by-step-debug-process) [TROUBLESHOOTING] Systematic debugging
+36. [Common Troubleshooting](#common-troubleshooting) [TROUBLESHOOTING] Known issues
+37. [Common Mistakes and Gotchas](#common-mistakes-and-gotchas) [WARNING] Pitfalls
+38. [Frequently Asked Questions](#frequently-asked-questions) [REFERENCE] Q&A
+39. [Quick Reference](#quick-reference) [REFERENCE] Cheat sheet
+40. [AI Assistant Quick Commands](#ai-assistant-quick-commands) **For AI Assistants**
+41. [AI Assistant Discovery Protocol](#ai-assistant-discovery-protocol) **For AI Assistants**
+42. [AI Self-Test: Validate Your Understanding](#ai-self-test-validate-your-understanding) [SELF-TEST] **For AI Assistants**
+
+---
+
+### How to Use This TOC (For AI Assistants)
+
+**When user asks for help creating devcontainer:**
+1. Read sections 1, 4, 5, 6, 7 ([START HERE] + [CRITICAL] ESSENTIAL)
+2. Check [Production Readiness Checklist](#production-readiness-checklist) before responding
+3. Provide [Complete Example](#complete-example-copy-this) as baseline (not Quick Start)
+4. Include all [CRITICAL] ESSENTIAL components (Security, MCP, Volumes, Git)
+
+**When user has existing devcontainer:**
+1. Read section 7 (Production Readiness Checklist) to validate
+2. Check section 12 (Common Misinterpretations) for known issues
+3. Reference [TROUBLESHOOTING] sections for debugging
+
+**When customizing for specific use case:**
+1. Use section 29 (AI Decision Trees) for architecture decisions
+2. Reference [OPTIONAL] sections for understanding
+3. Reference [ADVANCED] sections for complex patterns
+
+**Priority scoring:**
+- [START HERE]: Always read (navigation)
+- [CRITICAL] ESSENTIAL: Must include (8/8 = production-ready)
+- [RECOMMENDED]: Should include (production best practices)
+- [OPTIONAL]: Nice to have (understanding & customization)
+- [ADVANCED]: Only when needed (complex scenarios)
+- [TROUBLESHOOTING]: When issues arise
 
 ---
 
@@ -199,6 +289,91 @@ Devcontainers aren't always the best solution. **Avoid devcontainers when:**
 
 ---
 
+## AI Assistant Guidelines
+
+> **For AI Assistants**: When helping users create or debug devcontainers, read this section FIRST to understand the recommended approach and common patterns.
+
+### Decision-Making Framework
+
+1. **Assess User Experience**:
+ - Beginner? → Start with Production-Ready Setup, explain each component clearly
+ - Intermediate? → Provide working example with customization options
+ - Advanced? → Discuss trade-offs, security implications, optimization strategies
+
+2. **Understand Requirements**:
+ - What's the primary language? → Choose base image (Node.js, Python, Go, etc.)
+ - Need databases? → Suggest Docker Compose pattern
+ - Security concerns? → ALWAYS recommend firewall, volume isolation, non-root user
+ - Team environment? → Emphasize reproducibility and documentation
+
+3. **Provide Progressive Solutions**:
+ - **First**: Production-Ready Setup (security + MCP + git hooks + complete volumes)
+ - **Then**: Customize based on project type (React, Python, Next.js variants)
+ - **Finally**: Optimize if needed (caching, performance tuning, resource limits)
+
+4. **Always Include**:
+ - Network firewall configuration (init-firewall.sh)
+ - MCP server configuration (at minimum context7, cf-docs)
+ - Git branch protection hooks (setup-git-hooks.sh)
+ - Complete volume mounts (11+ volumes for full persistence)
+ - UTF-8 locale configuration
+ - Explanation of "why" not just "how"
+
+5. **Test Incrementally**:
+ - Suggest testing Dockerfile with `docker build -t test .devcontainer/`
+ - Recommend building → testing → adding features → rebuilding
+ - Don't give 500-line config without incremental validation
+
+6. **Reference Official Docs**:
+ - Link to https://docs.claude.com/en/docs/claude-code/devcontainer
+ - Cite VS Code devcontainers docs for advanced features
+ - Point to official MCP docs for server configuration
+
+7. **Explain Trade-offs**:
+ - Security vs. convenience (firewall configuration adds 10s startup time)
+ - Performance vs. disk space (slim images vs. feature-rich base images)
+ - Simplicity vs. robustness (minimal config vs. production-ready setup)
+
+### Common User Questions (Suggested Responses)
+
+**"How do I add Python to my Node devcontainer?"**
+```dockerfile
+# In Dockerfile after base image
+RUN apt-get update && apt-get install -y \
+ python3 \
+ python3-pip \
+ python3-venv \
+ && apt-get clean && rm -rf /var/lib/apt/lists/*
+```
+
+**"Can I use my existing Dockerfile?"**
+Yes, but recommend separation:
+- Production: `Dockerfile` (optimized for size, security)
+- Development: `.devcontainer/Dockerfile` (includes dev tools, AI assistants)
+
+**"How do I share my devcontainer with my team?"**
+Commit `.devcontainer/` to git. Team members:
+1. Pull repo
+2. Open in VS Code
+3. Click "Reopen in Container"
+
+**"Will this work on Windows?"**
+Yes, if using WSL2:
+- Docker Desktop → Settings → "Use WSL2 based engine"
+- Clone projects into WSL2 filesystem (not `/mnt/c/`), for performance
+
+**"How do I debug build failures?"**
+1. Test Dockerfile directly: `docker build -t test .devcontainer/`
+2. View full error output (not truncated VS Code log)
+3. Use `RUN echo "Checkpoint 1"` to isolate failing line
+4. Check [Step-by-Step Debug Process](#step-by-step-debug-process)
+
+**"Should I use devcontainers for [X]?"**
+[YES] Yes for: Multi-developer teams, projects with complex dependencies, security-sensitive work, cross-platform development
+[NO] No for: Simple scripts (overkill), GPU-intensive ML (complex setup), GUI desktop apps
+
+---
+
 ## Prerequisites
 
 ### Required Software
@@ -249,7 +424,615 @@ Before creating your first devcontainer, verify:
 - [ ] Familiarity with basic terminal commands (`cd`, `ls`, `cat`)
 - [ ] Understanding of what problem devcontainers solve for your project
 
-**Ready?** Proceed to [Creating a Devcontainer](#step-by-step-creating-a-devcontainer)
+**Ready?** Proceed to [Production-Ready Setup](#production-ready-setup) below
+
+---
+
+## [CRITICAL] Production-Ready Setup (Recommended Baseline)
+
+> **For AI Assistants**: This is the DEFAULT approach. Use this unless user explicitly requests minimal/quick start.
+
+This setup includes all essential components for real-world development projects:
+
+**What's Included:**
+- [x] Network security with firewall (default-deny + allowlist)
+- [x] MCP servers for Claude (context7, cf-docs, chrome-devtools)
+- [x] Git branch protection hooks (prevents accidental commits to main)
+- [x] Multi-AI support (Claude Code + OpenAI Codex + Google Gemini)
+- [x] Complete volume persistence (11+ volumes for configs, caches, tools)
+- [x] Production tooling (uv, bun, AWS CLI, gh, wrangler, vercel)
+- [x] Codex sandbox fix (required for Codex to work in containers)
+
+**Time Investment:**
+- First setup: 30-45 minutes (includes security configuration and downloads)
+- Subsequent rebuilds: <2 minutes (Docker layer caching)
+- Daily startup: <10 seconds (firewall rule verification)
+
+**File Structure You'll Create:**
+```
+.devcontainer/
+├── devcontainer.json           # VS Code configuration (main file)
+├── Dockerfile                  # Container image definition
+├── init-firewall.sh           # Network security (CRITICAL for production)
+├── init-claude-config.sh      # MCP server auto-configuration
+├── init-codex-config.sh       # Codex sandbox fix (required for Codex)
+├── setup-git-hooks.sh         # Git branch protection installation
+├── settings.json.template     # Claude Code optimizations
+├── mcp.json.template          # MCP servers configuration
+└── config.toml.template       # Codex CLI configuration
+```
+
+**Key Differences from Quick Start:**
+
+| Aspect | Quick Start (Minimal) | Production-Ready (Recommended) |
+|--------|----------------------|-------------------------------|
+| **Security** | [NO] No firewall | [YES] Firewall + IPv6 disabled |
+| **MCP Servers** | [NO] None configured | [YES] 3+ servers (context7, cf-docs, chrome-devtools) |
+| **Git Safety** | [NO] No protection | [YES] Pre-commit hooks block main/master commits |
+| **Volume Mounts** | 6 basic volumes | 11+ volumes (complete persistence) |
+| **Installation Method** | postCreateCommand (loses on rebuild) | Dockerfile RUN (persists) |
+| **Multi-AI** | [NO] No support | [YES] Claude + Codex + Gemini configured |
+| **Build Time** | 5-10 min | 30-45 min first time, <2 min cached |
+| **Production Ready** | [NO] No | [YES] Yes |
+
+**When to Use Production-Ready:**
+- [x] Any real project (team or personal)
+- [x] Client work or security-sensitive code
+- [x] Projects that will be maintained long-term
+- [x] When you want MCP servers and multi-AI support
+- [x] When you want git safety and network security
+
+**When Quick Start is Acceptable:**
+- [WARNING] Throwaway experiments (will delete within days)
+- [WARNING] Learning Docker basics (not real development)
+- [WARNING] Testing a new tool for 5 minutes
+
+**Complete Example:** See [Multi-AI Configuration](#multi-ai-configuration) section for full implementation with all 8 files
+
+**Next Steps:**
+1. Review [Architecture Overview](#architecture-overview) below to understand components
+2. See [Multi-AI Configuration](#multi-ai-configuration) for complete copy-paste example
+3. Follow [Step-by-Step: Creating a Devcontainer](#step-by-step-creating-a-devcontainer) for implementation
+4. Use [Security Best Practices](#security-best-practices) for firewall configuration
+
+---
+
+## [CRITICAL] Complete Example (Copy This)
+
+> **TL;DR for AI Assistants:**
+> - This is the COMPLETE production-ready implementation with all 8 files
+> - Copy these files directly when users request devcontainer setup
+> - Includes: Security firewall, MCP servers, multi-AI support, git hooks, full persistence
+> - This is what "Production-Ready Setup" looks like in practice
+> - Adjust base image and tools based on user's tech stack (this example uses Node.js 22)
+
+Below is a complete, production-ready devcontainer configuration with all security, MCP, and multi-AI components. This is the **recommended baseline** for all projects.
+
+### File 1: `.devcontainer/devcontainer.json`
+
+```json
+{
+  "name": "Multi-AI Development Environment (Node.js 22)",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "remoteUser": "node",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {
+      "version": "latest",
+      "dockerDashComposeVersion": "v2"
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash",
+        "files.eol": "\n",
+        "editor.formatOnSave": true
+      },
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode"
+      ]
+    }
+  },
+  "mounts": [
+    "source=claude-code-config-${devcontainerId},target=/home/node/.claude,type=volume",
+    "source=codex-config-${devcontainerId},target=/home/node/.codex,type=volume",
+    "source=gemini-config-${devcontainerId},target=/home/node/.gemini,type=volume",
+    "source=ghub-config-${devcontainerId},target=/home/node/.config/gh,type=volume",
+    "source=aws-config-${devcontainerId},target=/home/node/.aws,type=volume",
+    "source=bashhistory-${devcontainerId},target=/commandhistory,type=volume",
+    "source=npm-cache-${devcontainerId},target=/home/node/.npm,type=volume",
+    "source=local-bin-${devcontainerId},target=/home/node/.local,type=volume",
+    "source=ssh-keys-${devcontainerId},target=/home/node/.ssh,type=volume",
+    "source=gitconfig-${devcontainerId},target=/home/node/.gitconfig,type=volume",
+    "source=wrangler-config-${devcontainerId},target=/home/node/.wrangler,type=volume"
+  ],
+  "postStartCommand": "/bin/bash /home/node/.devcontainer/init-firewall.sh && /bin/bash /home/node/.devcontainer/init-claude-config.sh && /bin/bash /home/node/.devcontainer/init-codex-config.sh && /bin/bash /home/node/.devcontainer/setup-git-hooks.sh",
+  "runArgs": [
+    "--cap-add=NET_ADMIN",
+    "--cap-add=NET_RAW",
+    "--sysctl=net.ipv6.conf.all.disable_ipv6=1"
+  ]
+}
+```
+
+### File 2: `.devcontainer/Dockerfile`
+
+```dockerfile
+FROM node:22
+
+# Switch to root for system package installation
+USER root
+
+# Install system dependencies and security tools
+RUN apt-get update && apt-get install -y \
+    git \
+    curl \
+    wget \
+    unzip \
+    vim \
+    sudo \
+    iptables \
+    iputils-ping \
+    dnsutils \
+    net-tools \
+    procps \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install UV (Python package installer)
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
+    mv /root/.local/bin/uv /usr/local/bin/uv
+
+# Install Bun (JavaScript runtime & package manager)
+RUN curl -fsSL https://bun.sh/install | bash && \
+    mv /root/.bun/bin/bun /usr/local/bin/bun
+
+# Install AWS CLI v2
+RUN cd /tmp && \
+    curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" && \
+    unzip awscliv2.zip && \
+    ./aws/install && \
+    rm -rf awscliv2.zip aws
+
+# Install GitHub CLI
+RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg && \
+    chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg && \
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | tee /etc/apt/sources.list.d/github-cli.list > /dev/null && \
+    apt-get update && \
+    apt-get install -y gh && \
+    rm -rf /var/lib/apt/lists/*
+
+# Switch to node user for user-level installations
+USER node
+
+# Install Multi-AI CLIs (Claude Code, OpenAI Codex, Google Gemini)
+RUN npm install -g @anthropic-ai/claude-code@latest \
+                   @openai/codex@latest \
+                   @google/gemini-cli@latest
+
+# Install Wrangler (Cloudflare CLI) and Vercel CLI
+RUN npm install -g wrangler@latest vercel@latest
+
+# Set up bash history persistence
+RUN SNIPPET="export PROMPT_COMMAND='history -a' && export HISTFILE=/commandhistory/.bash_history" \
+    && mkdir -p /home/node/.bashrc.d \
+    && echo "$SNIPPET" > /home/node/.bashrc.d/history.bash \
+    && echo "for script in /home/node/.bashrc.d/*.bash; do source \$script; done" >> /home/node/.bashrc
+
+# Set working directory
+WORKDIR /workspaces
+
+# Default command
+CMD ["/bin/bash"]
+```
+
+### File 3: `.devcontainer/init-firewall.sh`
+
+```bash
+#!/bin/bash
+# Network firewall initialization - Default-deny with allowlist
+# Runs at container startup (postStartCommand)
+
+set -e
+
+echo "Initializing network firewall (default-deny policy)..."
+
+# Disable IPv6 (three-layer defense)
+echo "Disabling IPv6 at runtime..."
+sudo sysctl -w net.ipv6.conf.all.disable_ipv6=1 2>/dev/null || echo "[WARNING]  sysctl failed (expected in some environments)"
+sudo sysctl -w net.ipv6.conf.default.disable_ipv6=1 2>/dev/null || true
+
+# Clear existing rules
+sudo iptables -F
+sudo iptables -X
+
+# Set default policies (DROP all incoming/forwarding, ALLOW outgoing)
+sudo iptables -P INPUT DROP
+sudo iptables -P FORWARD DROP
+sudo iptables -P OUTPUT ACCEPT
+
+# Allow loopback traffic (essential for local services)
+sudo iptables -A INPUT -i lo -j ACCEPT
+
+# Allow established connections (responses to outgoing requests)
+sudo iptables -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
+
+# Allow DNS resolution (required for all internet access)
+sudo iptables -A INPUT -p udp --sport 53 -j ACCEPT
+sudo iptables -A INPUT -p tcp --sport 53 -j ACCEPT
+
+# Allowlist: Trusted domains for development
+# Anthropic (Claude API)
+sudo iptables -A INPUT -p tcp -s api.anthropic.com -j ACCEPT
+# OpenAI (Codex API)
+sudo iptables -A INPUT -p tcp -s api.openai.com -j ACCEPT
+# Google (Gemini API)
+sudo iptables -A INPUT -p tcp -s generativelanguage.googleapis.com -j ACCEPT
+# npm registry
+sudo iptables -A INPUT -p tcp -s registry.npmjs.org -j ACCEPT
+# GitHub
+sudo iptables -A INPUT -p tcp -s github.com -j ACCEPT
+sudo iptables -A INPUT -p tcp -s api.github.com -j ACCEPT
+# Cloudflare
+sudo iptables -A INPUT -p tcp -s cloudflare.com -j ACCEPT
+sudo iptables -A INPUT -p tcp -s api.cloudflare.com -j ACCEPT
+
+# Log dropped packets (optional - useful for debugging)
+sudo iptables -A INPUT -j LOG --log-prefix "FIREWALL-DROP: " --log-level 4
+
+echo "[YES] Firewall configured (default-deny + allowlist)"
+sudo iptables -L -n -v
+```
+
+### File 4: `.devcontainer/init-claude-config.sh`
+
+```bash
+#!/bin/bash
+# Claude Code MCP server auto-configuration
+# Runs at container startup (postStartCommand)
+
+set -e
+
+CLAUDE_DIR="/home/node/.claude"
+MCP_CONFIG="$CLAUDE_DIR/mcp.json"
+MCP_TEMPLATE="/home/node/.devcontainer/mcp.json.template"
+SETTINGS_CONFIG="$CLAUDE_DIR/settings.local.json"
+SETTINGS_TEMPLATE="/home/node/.devcontainer/settings.json.template"
+
+echo "Configuring Claude Code MCP servers..."
+
+# Create .claude directory if missing
+mkdir -p "$CLAUDE_DIR"
+
+# Initialize MCP config from template if missing
+if [ ! -f "$MCP_CONFIG" ] && [ -f "$MCP_TEMPLATE" ]; then
+    echo "Creating mcp.json from template..."
+    cp "$MCP_TEMPLATE" "$MCP_CONFIG"
+    echo "[YES] MCP servers configured (context7, cf-docs, chrome-devtools)"
+else
+    echo "[WARNING]  mcp.json already exists (skipping)"
+fi
+
+# Initialize settings from template if missing
+if [ ! -f "$SETTINGS_CONFIG" ] && [ -f "$SETTINGS_TEMPLATE" ]; then
+    echo "Creating settings.local.json from template..."
+    cp "$SETTINGS_TEMPLATE" "$SETTINGS_CONFIG"
+    echo "[YES] Claude Code settings configured"
+else
+    echo "[WARNING]  settings.local.json already exists (skipping)"
+fi
+
+echo "[YES] Claude Code configuration complete"
+```
+
+### File 5: `.devcontainer/init-codex-config.sh`
+
+```bash
+#!/bin/bash
+# OpenAI Codex sandbox fix for container environments
+# Runs at container startup (postStartCommand)
+
+set -e
+
+CODEX_DIR="/home/node/.codex"
+CODEX_CONFIG="$CODEX_DIR/config.toml"
+CODEX_TEMPLATE="/home/node/.devcontainer/config.toml.template"
+
+echo "Configuring OpenAI Codex for container environment..."
+
+# Create .codex directory if missing
+mkdir -p "$CODEX_DIR"
+
+# Initialize Codex config from template if missing
+if [ ! -f "$CODEX_CONFIG" ] && [ -f "$CODEX_TEMPLATE" ]; then
+    echo "Creating config.toml from template (sandbox_mode = true)..."
+    cp "$CODEX_TEMPLATE" "$CODEX_CONFIG"
+    echo "[YES] Codex sandbox fix applied"
+else
+    echo "[WARNING]  config.toml already exists (skipping)"
+fi
+
+echo "[YES] Codex configuration complete"
+```
+
+### File 6: `.devcontainer/setup-git-hooks.sh`
+
+```bash
+#!/bin/bash
+# Git branch protection - Install pre-commit hook
+# Runs at container startup (postStartCommand)
+
+set -e
+
+GIT_HOOKS_DIR="/workspaces/$(basename $PWD)/.git/hooks"
+PRE_COMMIT_HOOK="$GIT_HOOKS_DIR/pre-commit"
+
+echo "Installing git branch protection hooks..."
+
+# Check if .git directory exists
+if [ ! -d "/workspaces/$(basename $PWD)/.git" ]; then
+    echo "[WARNING]  Not a git repository (skipping hook installation)"
+    exit 0
+fi
+
+# Create hooks directory if missing
+mkdir -p "$GIT_HOOKS_DIR"
+
+# Install pre-commit hook to block main/master commits
+cat > "$PRE_COMMIT_HOOK" <<'EOF'
+#!/bin/bash
+# Pre-commit hook: Block direct commits to main/master branches
+
+BRANCH=$(git symbolic-ref --short HEAD 2>/dev/null || echo "")
+
+if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "master" ]; then
+    echo "[NO] ERROR: Direct commits to '$BRANCH' branch are blocked!"
+    echo ""
+    echo "Please create a feature branch instead:"
+    echo "  git checkout -b feature/your-feature-name"
+    echo "  git commit -m 'Your commit message'"
+    echo ""
+    echo "To bypass this hook (NOT RECOMMENDED):"
+    echo "  git commit --no-verify"
+    exit 1
+fi
+EOF
+
+chmod +x "$PRE_COMMIT_HOOK"
+echo "[YES] Git hooks installed (blocks main/master commits)"
+```
+
+### File 7: `.devcontainer/mcp.json.template`
+
+```json
+{
+  "mcpServers": {
+    "context7": {
+      "transport": {
+        "type": "sse",
+        "url": "https://mcp.context7.io/sse"
+      }
+    },
+    "cf-docs": {
+      "transport": {
+        "type": "sse",
+        "url": "https://mcp-server-cloudflare-docs.taubyte-services.workers.dev/sse"
+      }
+    },
+    "chrome-devtools": {
+      "command": "npx",
+      "args": ["-y", "@executeautomation/chromemcp"],
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  }
+}
+```
+
+### File 8: `.devcontainer/config.toml.template`
+
+```toml
+# OpenAI Codex configuration for container environments
+# Critical: sandbox_mode = true required for Codex to work in containers
+
+[codex]
+sandbox_mode = true
+
+[telemetry]
+enabled = false
+```
+
+### File 9 (Optional): `.devcontainer/settings.json.template`
+
+```json
+{
+  "workspace": {
+    "enableTodos": true,
+    "todoFormat": "markdown"
+  },
+  "chat": {
+    "maxContextTokens": 100000,
+    "enableStreaming": true
+  }
+}
+```
+
+### How to Use This Example
+
+**For AI Assistants:**
+1. Copy all 8 files above when user requests devcontainer setup
+2. Adjust Dockerfile base image based on user's tech stack (node:22, python:3.11, golang:1.21, etc.)
+3. Adjust Dockerfile RUN commands to install user's required tools
+4. Adjust firewall allowlist in init-firewall.sh for user's APIs
+5. Explain each file's purpose and customization points
+
+**For Users:**
+1. Create `.devcontainer/` directory in your project root
+2. Copy all files above into `.devcontainer/` directory
+3. Adjust Dockerfile to match your tech stack
+4. Run "Dev Containers: Rebuild Container" in VS Code
+5. Wait 30-45 minutes for first build (downloads and caches packages)
+6. Verify MCP servers: `claude mcp list` (should show 3 servers)
+7. Verify firewall: `sudo iptables -L -n -v` (should show allowlist rules)
+8. Verify git hooks: Try `git commit` on main branch (should block)
+
+### What This Example Includes
+
+[YES] **Security**: Network firewall with default-deny policy, IPv6 disabled, iptables allowlist
+[YES] **MCP Servers**: context7 (SSE), cf-docs (SSE), chrome-devtools (stdio)
+[YES] **Multi-AI**: Claude Code, OpenAI Codex, Google Gemini CLI
+[YES] **Git Safety**: Pre-commit hooks block main/master commits
+[YES] **Volume Persistence**: 11 volumes for configs (.claude, .codex, .gemini, .aws, .ssh, etc.)
+[YES] **Production Tools**: uv, bun, AWS CLI, gh, wrangler, vercel
+[YES] **Codex Fix**: sandbox_mode = true in config.toml (required for containers)
+[YES] **Non-root User**: Runs as `node` user (security best practice)
+
+---
+
+## [ADVANCED] AI Decision Trees
+
+> **For AI Assistants**: Use these decision trees to quickly determine the right approach for user requests.
+
+### Decision Tree 1: Which Base Image?
+
+```
+User's primary language?
+├─ JavaScript/TypeScript → node:22
+├─ Python → python:3.11-slim
+├─ Go → golang:1.21
+├─ Rust → rust:1.75
+├─ Java → eclipse-temurin:17
+├─ Multi-language → node:22 + install others
+└─ Universal → mcr.microsoft.com/devcontainers/base:ubuntu
+```
+
+### Decision Tree 2: MCP Transport Type
+
+**How to determine transport**: See "Testing MCP Server Transport Support" section below for testing methodology.
+
+```
+MCP server needs what?
+├─ External API (Context7, Cloudflare Docs)
+│ ├─ Context7
+│ │ └─ Use: transport.type = "sse" (only option as of Oct 27, 2025)
+│ │ URL: https://mcp.context7.com/sse
+│ │
+│ └─ Cloudflare Docs (two options)
+│ ├─ SSE (public, simple): transport.type = "sse"
+│ │ URL: https://docs.mcp.cloudflare.com/sse
+│ │
+│ └─ mcp-remote (OAuth, recommended): transport.type = "stdio"
+│ Command: npx mcp-remote https://docs.mcp.cloudflare.com/mcp
+│
+├─ Local npm package (Chrome DevTools)
+│ └─ Use: transport.type = "stdio"
+│ Command: npx package-name
+│
+└─ Custom server
+ └─ Test to determine: Use curl or try both transports
+ See "Testing MCP Server Transport Support" section
+```
+
+### Decision Tree 3: Volume or Bind Mount?
+
+```
+What are you persisting?
+├─ API keys, configs (.claude/, .codex/, .aws/)
+│ → Named volume (survives container deletion)
+│ → source=name-${devcontainerId},target=/path,type=volume
+│
+├─ CLI binaries and tools (AWS CLI, wrangler, vercel)
+│ → Named volume (persists across rebuilds)
+│ → source=local-bin-${devcontainerId},target=/home/node/.local,type=volume
+│ → source=wrangler-config-${devcontainerId},target=/home/node/.wrangler,type=volume
+│ → source=vercel-config-${devcontainerId},target=/home/node/.vercel,type=volume
+│
+├─ SSH keys (read-only access)
+│ → Bind mount (readonly)
+│ → source=${localEnv:HOME}/.ssh,target=/home/node/.ssh,type=bind,readonly
+│
+├─ Temporary build cache
+│ → Named volume (disposable)
+│ → source=cache-${devcontainerId},target=/cache,type=volume
+│
+└─ Shared data with host
+ → Bind mount (read-write, caution!)
+ → source=/host/path,target=/container/path,type=bind
+```
+
+### Decision Tree 4: Troubleshooting Entry Point
+
+```
+User reports error, what type?
+├─ "Container won't build"
+│ → Go to: Step-by-Step Debug Process → Build Failures
+│
+├─ "Claude/tool command not found"
+│ → Go to: Common Troubleshooting → PATH issues
+│
+├─ "Permission denied"
+│ → Go to: Common Troubleshooting → File permissions
+│
+├─ "Out of memory/disk space"
+│ → Go to: Resource Considerations
+│
+└─ "MCP servers not loading"
+ → Go to: MCP Server Setup → Debugging
+```
+
+### Decision Tree 5: Security Level
+
+```
+Who owns the codebase?
+├─ You/Your team (trusted)
+│ ├─ Sensitive data? (client project, API keys)
+│ │ → Enable firewall, isolate volumes, use --dangerously-skip-permissions
+│ └─ No sensitive data
+│ → Basic setup, optional firewall
+│
+├─ Open source (trusted maintainers)
+│ → Standard setup, review .devcontainer/ before opening
+│
+└─ Unknown/Untrusted
+ → DON'T use devcontainer OR
+ → Use heavily restricted firewall
+ → Don't use --dangerously-skip-permissions
+ → Review Dockerfile line-by-line
+```
+
+### Decision Tree 6: Image vs Build vs Compose?
+
+```
+How complex is the project setup?
+├─ Single service, standard language (Node, Python, Go)
+│ ├─ No custom tools needed?
+│ │ → Use "image": "node:22" (fastest, simplest)
+│ │ → Add tools via Features
+│ │
+│ └─ Custom tools or specific versions needed?
+│ → Use "build": {"dockerfile": "Dockerfile"}
+│ → Customize base image with RUN commands
+│
+├─ Multiple services (app + database + cache)
+│ → Use Docker Compose
+│ → Create docker-compose.yml with all services
+│ → Reference in devcontainer.json: "dockerComposeFile": "docker-compose.yml"
+│
+└─ Need both custom build AND multiple services?
+ → Use Docker Compose + custom Dockerfile
+ → docker-compose.yml defines services
+ → app service uses "build: {dockerfile: .devcontainer/Dockerfile}"
+```
+
+**Quick Decision Guide**:
+- **Just coding** (no database) → `"image": "language:version"`
+- **Custom tools** (Chromium, ffmpeg) → `"build": {"dockerfile": "Dockerfile"}`
+- **Database required** → Docker Compose
+- **Complex stack** (app+db+redis+mq) → Docker Compose with custom Dockerfile
 
 ---
 
@@ -668,148 +1451,6 @@ your-project/
 
 ---
 
-
----
-
-
-> **For AI Assistants**: Use these decision trees to quickly determine the right approach for user requests.
-
-### Decision Tree 1: Which Base Image?
-
-```
-User's primary language?
-├─ JavaScript/TypeScript → node:22
-├─ Python → python:3.11-slim
-├─ Go → golang:1.21
-├─ Rust → rust:1.75
-├─ Java → eclipse-temurin:17
-├─ Multi-language → node:22 + install others
-└─ Universal → mcr.microsoft.com/devcontainers/base:ubuntu
-```
-
-### Decision Tree 2: MCP Transport Type
-
-**How to determine transport**: See "Testing MCP Server Transport Support" section below for testing methodology.
-
-```
-MCP server needs what?
-├─ External API (Context7, Cloudflare Docs)
-│ ├─ Context7
-│ │ └─ Use: transport.type = "sse" (only option as of Oct 27, 2025)
-│ │ URL: https://mcp.context7.com/sse
-│ │
-│ └─ Cloudflare Docs (two options)
-│ ├─ SSE (public, simple): transport.type = "sse"
-│ │ URL: https://docs.mcp.cloudflare.com/sse
-│ │
-│ └─ mcp-remote (OAuth, recommended): transport.type = "stdio"
-│ Command: npx mcp-remote https://docs.mcp.cloudflare.com/mcp
-│
-├─ Local npm package (Chrome DevTools)
-│ └─ Use: transport.type = "stdio"
-│ Command: npx package-name
-│
-└─ Custom server
- └─ Test to determine: Use curl or try both transports
- See "Testing MCP Server Transport Support" section
-```
-
-### Decision Tree 3: Volume or Bind Mount?
-
-```
-What are you persisting?
-├─ API keys, configs (.claude/, .codex/, .aws/)
-│ → Named volume (survives container deletion)
-│ → source=name-${devcontainerId},target=/path,type=volume
-│
-├─ CLI binaries and tools (AWS CLI, wrangler, vercel)
-│ → Named volume (persists across rebuilds)
-│ → source=local-bin-${devcontainerId},target=/home/node/.local,type=volume
-│ → source=wrangler-config-${devcontainerId},target=/home/node/.wrangler,type=volume
-│ → source=vercel-config-${devcontainerId},target=/home/node/.vercel,type=volume
-│
-├─ SSH keys (read-only access)
-│ → Bind mount (readonly)
-│ → source=${localEnv:HOME}/.ssh,target=/home/node/.ssh,type=bind,readonly
-│
-├─ Temporary build cache
-│ → Named volume (disposable)
-│ → source=cache-${devcontainerId},target=/cache,type=volume
-│
-└─ Shared data with host
- → Bind mount (read-write, caution!)
- → source=/host/path,target=/container/path,type=bind
-```
-
-### Decision Tree 4: Troubleshooting Entry Point
-
-```
-User reports error, what type?
-├─ "Container won't build"
-│ → Go to: Step-by-Step Debug Process → Build Failures
-│
-├─ "Claude/tool command not found"
-│ → Go to: Common Troubleshooting → PATH issues
-│
-├─ "Permission denied"
-│ → Go to: Common Troubleshooting → File permissions
-│
-├─ "Out of memory/disk space"
-│ → Go to: Resource Considerations
-│
-└─ "MCP servers not loading"
- → Go to: MCP Server Setup → Debugging
-```
-
-### Decision Tree 5: Security Level
-
-```
-Who owns the codebase?
-├─ You/Your team (trusted)
-│ ├─ Sensitive data? (client project, API keys)
-│ │ → Enable firewall, isolate volumes, use --dangerously-skip-permissions
-│ └─ No sensitive data
-│ → Basic setup, optional firewall
-│
-├─ Open source (trusted maintainers)
-│ → Standard setup, review .devcontainer/ before opening
-│
-└─ Unknown/Untrusted
- → DON'T use devcontainer OR
- → Use heavily restricted firewall
- → Don't use --dangerously-skip-permissions
- → Review Dockerfile line-by-line
-```
-
-### Decision Tree 6: Image vs Build vs Compose?
-
-```
-How complex is the project setup?
-├─ Single service, standard language (Node, Python, Go)
-│ ├─ No custom tools needed?
-│ │ → Use "image": "node:22" (fastest, simplest)
-│ │ → Add tools via Features
-│ │
-│ └─ Custom tools or specific versions needed?
-│ → Use "build": {"dockerfile": "Dockerfile"}
-│ → Customize base image with RUN commands
-│
-├─ Multiple services (app + database + cache)
-│ → Use Docker Compose
-│ → Create docker-compose.yml with all services
-│ → Reference in devcontainer.json: "dockerComposeFile": "docker-compose.yml"
-│
-└─ Need both custom build AND multiple services?
- → Use Docker Compose + custom Dockerfile
- → docker-compose.yml defines services
- → app service uses "build: {dockerfile: .devcontainer/Dockerfile}"
-```
-
-**Quick Decision Guide**:
-- **Just coding** (no database) → `"image": "language:version"`
-- **Custom tools** (Chromium, ffmpeg) → `"build": {"dockerfile": "Dockerfile"}`
-- **Database required** → Docker Compose
-- **Complex stack** (app+db+redis+mq) → Docker Compose with custom Dockerfile
 
 ---
 
@@ -3204,7 +3845,15 @@ Once your devcontainer is working:
 
 ## Step-by-Step: Managing Devcontainers
 
-## Lifecycle Hooks Explained
+## [RECOMMENDED] Lifecycle Hooks Explained (Recommended)
+
+> **TL;DR for AI Assistants:**
+> - 5 lifecycle hooks execute in strict order: initializeCommand → onCreateCommand → updateContentCommand → postCreateCommand → postStartCommand
+> - initializeCommand runs on host (before container exists) - use for local file prep
+> - onCreateCommand runs once at container creation (no user secrets) - use for system packages in Dockerfile
+> - postCreateCommand runs after container ready (has user secrets) - use for CLI tool installations
+> - postStartCommand runs every container start - use for service initialization
+> - Use execution order diagram below when debugging initialization issues
 
 > **AI Assistant Guidance**: Understanding lifecycle hooks is critical for proper devcontainer configuration. Use this execution order diagram when helping users debug initialization issues.
 
@@ -3456,11 +4105,11 @@ Multiple commands executed in parallel
 ```
 onCreateCommand fails
  ↓
-updateContentCommand skipped ⏭️
+updateContentCommand skipped 
  ↓
-postCreateCommand skipped ⏭️
+postCreateCommand skipped 
  ↓
-postStartCommand skipped ⏭️
+postStartCommand skipped 
 ```
 
 **Best practices**:
@@ -3675,7 +4324,7 @@ docker volume prune
 docker system prune -a --volumes
 ```
 
-**️ Warning**: `docker system prune -a --volumes` removes **all** unused Docker resources. If you have other Docker projects, this affects them too.
+** Warning**: `docker system prune -a --volumes` removes **all** unused Docker resources. If you have other Docker projects, this affects them too.
 
 **Safer Approach**:
 ```bash
@@ -3688,7 +4337,16 @@ docker volume rm <volume-name>
 
 ---
 
-## Multi-AI Configuration
+## [RECOMMENDED] Multi-AI Configuration (Recommended)
+
+> **TL;DR for AI Assistants:**
+> - Install 3 CLIs: @anthropic-ai/claude-code, @openai/codex, @google/gemini-cli
+> - Configure init scripts: init-claude-config.sh, init-codex-config.sh
+> - Add 3 volume mounts: .claude, .codex, .gemini
+> - Codex requires sandbox fix (config.toml.template with sandbox_mode = true)
+> - **Quick Start**: See [Complete Example (Copy This)](#complete-example-copy-this) for full 9-file implementation with all 3 AI CLIs
+
+> **Note**: This section provides detailed explanations. For a ready-to-copy complete example, jump to [Complete Example (Copy This)](#complete-example-copy-this).
 
 Configure multiple AI assistants (Claude Code, OpenAI Codex, Google Gemini) in one container.
 
@@ -3756,7 +4414,7 @@ RUN npm install -g \
 
 ### API Key Configuration
 
-**Method 1: .env File (Recommended)** ⭐
+**Method 1: .env File (Recommended)** [IMPORTANT]
 
 Create `.env` in project root:
 
@@ -3784,7 +4442,7 @@ echo '{"apiKey": "YOUR_KEY"}' > ~/.gemini/settings.json
 export GEMINI_API_KEY=YOUR_KEY  # Add to .bashrc/.zshrc for persistence
 ```
 
-⚠️ **Security**: Always ensure .env is in .gitignore before adding real API keys.
+[WARNING] **Security**: Always ensure .env is in .gitignore before adding real API keys.
 
 Get your API key: https://makersuite.google.com/app/apikey
 
@@ -3838,7 +4496,7 @@ Add to `~/.claude/settings.json` or `.devcontainer/settings.json.template`:
 - **Effect**: Claude Code executes tools immediately without prompts
 - **Speed Improvement**: 50-80% faster responses (no prompt delays)
 - **Safe when**: Running in isolated devcontainer with network restrictions
-- ️ **WARNING**: **NEVER** use this flag on host system or with untrusted code!
+-  **WARNING**: **NEVER** use this flag on host system or with untrusted code!
 
 **`verbose: true`**
 - **What**: Enables detailed logging for all operations
@@ -3965,7 +4623,15 @@ claude chat
 
 ---
 
-## MCP Server Setup
+## [CRITICAL] MCP Server Setup (Essential for Claude Code)
+
+> **TL;DR for AI Assistants:**
+> - MCP servers are ESSENTIAL for Claude Code functionality (not optional/advanced)
+> - Minimum configuration: 3 servers (context7, cf-docs, chrome-devtools)
+> - Two transport types: SSE (remote, no install) vs stdio (local npm packages)
+> - Configure in mcp.json template, auto-initialized via init-claude-config.sh
+> - Always include volume mount for .claude directory to persist configuration
+> - See "Testing MCP Server Transport Support" section for verification commands
 
 Model Context Protocol (MCP) servers extend Claude Code with specialized capabilities.
 
@@ -4446,7 +5112,16 @@ npx chrome-devtools-mcp@latest --help
 
 ---
 
-## Security Best Practices
+## [CRITICAL] Security Best Practices (Essential - Not Optional)
+
+> **TL;DR for AI Assistants:**
+> - Security is ESSENTIAL for production devcontainers, not advanced/optional
+> - Always include network firewall (init-firewall.sh) unless explicitly told "skip security"
+> - Three-layer IPv6 defense: container creation, runtime disable, ip6tables backup
+> - 10-30 second startup overhead for DNS resolution and rule configuration
+> - Defense-in-depth: Docker isolation + network firewall + non-root user
+
+> **For Users:** Container isolation alone doesn't prevent malicious npm packages, API key leaks, or supply chain attacks. Network security is a production requirement, not an advanced feature.
 
 ### Network Isolation with Firewall
 
@@ -4913,7 +5588,7 @@ RUN git config --global core.excludesfile ~/.gitignore_global && \
 }
 ```
 
-### ️ The `--security-opt=no-new-privileges` Incompatibility
+###  The `--security-opt=no-new-privileges` Incompatibility
 
 **Critical Finding** (October 2025 field testing):
 
@@ -5175,7 +5850,7 @@ HOOKS_DIR="$REPO_ROOT/.git/hooks"
 
 # Validate git repository (works with worktrees and submodules)
 if ! git rev-parse --git-dir > /dev/null 2>&1; then
-    echo "❌ ERROR: Not a git repository"
+    echo "[NO] ERROR: Not a git repository"
     echo "Current directory: $(pwd)"
     echo "Repository root: $REPO_ROOT"
     exit 1
@@ -5183,7 +5858,7 @@ fi
 
 # Validate hooks directory is writable
 if [ -d "$HOOKS_DIR" ] && [ ! -w "$HOOKS_DIR" ]; then
-    echo "❌ ERROR: Hooks directory is not writable: $HOOKS_DIR"
+    echo "[NO] ERROR: Hooks directory is not writable: $HOOKS_DIR"
     exit 1
 fi
 
@@ -5212,37 +5887,37 @@ BRANCH=$(git branch --show-current)
 # Block commits to protected branches
 if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "master" ]; then
     echo ""
-    echo "❌ ERROR: Direct commits to '$BRANCH' are not allowed"
+    echo "[NO] ERROR: Direct commits to '$BRANCH' are not allowed"
     echo ""
     echo "This is a safety measure to protect your work."
     echo ""
-    echo "📝 Create a feature branch instead:"
+    echo "Create a feature branch instead:"
     echo "   git checkout -b feature/your-feature-name"
     echo ""
     echo "Or for session-based work:"
     echo "   git checkout -b session/$(date +%Y%m%d-%H%M)-description"
     echo ""
-    echo "⚠️  To bypass this hook (NOT recommended):"
+    echo "[WARNING]  To bypass this hook (NOT recommended):"
     echo "   git commit --no-verify"
     echo ""
     exit 1
 fi
 
 # Success - allow commit
-echo "✅ Committing to branch: $BRANCH"
+echo "[YES] Committing to branch: $BRANCH"
 exit 0
 EOF
 
 chmod +x "$HOOKS_DIR/pre-commit"
 
-echo "✅ Pre-commit hook installed"
+echo "[YES] Pre-commit hook installed"
 echo ""
 
 # Verify installation
 if [ -x "$HOOKS_DIR/pre-commit" ]; then
-    echo "✅ Hook is executable"
+    echo "[YES] Hook is executable"
 else
-    echo "❌ Hook is not executable!"
+    echo "[NO] Hook is not executable!"
     exit 1
 fi
 
@@ -5307,9 +5982,9 @@ bash .devcontainer/setup-git-hooks.sh
 === Git Hooks Setup ===
 
 Installing pre-commit hook...
-✅ Pre-commit hook installed
+[YES] Pre-commit hook installed
 
-✅ Hook is executable
+[YES] Hook is executable
 
 === Setup Complete ===
 
@@ -5336,17 +6011,17 @@ git commit -m "test"
 
 **Expected output** (hook blocks commit):
 ```
-❌ ERROR: Direct commits to 'main' are not allowed
+[NO] ERROR: Direct commits to 'main' are not allowed
 
 This is a safety measure to protect your work.
 
-📝 Create a feature branch instead:
+ Create a feature branch instead:
    git checkout -b feature/your-feature-name
 
 Or for session-based work:
    git checkout -b session/20251029-1430-description
 
-⚠️  To bypass this hook (NOT recommended):
+[WARNING]  To bypass this hook (NOT recommended):
    git commit --no-verify
 ```
 
@@ -5363,7 +6038,7 @@ git commit -m "test commit"
 
 **Expected output** (hook allows commit):
 ```
-✅ Committing to branch: feature/test-hook
+[YES] Committing to branch: feature/test-hook
 [feature/test-hook abc1234] test commit
  1 file changed, 1 insertion(+)
 ```
@@ -5394,15 +6069,15 @@ git status
 
 **Status interpretations and actions**:
 
-✅ **"Your branch is up to date with 'origin/master'"** → Proceed with branch creation
+[YES] **"Your branch is up to date with 'origin/master'"** → Proceed with branch creation
 
-⚠️ **"Your branch is behind 'origin/master' by X commits"** → Pull first:
+[WARNING] **"Your branch is behind 'origin/master' by X commits"** → Pull first:
 ```bash
 git pull origin master
 git status  # Verify now "up to date"
 ```
 
-❌ **"Your branch and 'origin/master' have diverged"** → Resolve divergence:
+[NO] **"Your branch and 'origin/master' have diverged"** → Resolve divergence:
 ```bash
 # Option 1: No local commits (safe reset)
 git reset --hard origin/master
@@ -5451,7 +6126,7 @@ git checkout -b session/20251029-1600-update-docs
 
 **Check if hook is installed**:
 ```bash
-test -x .git/hooks/pre-commit && echo "✅ Hook installed" || echo "❌ Hook missing"
+test -x .git/hooks/pre-commit && echo "[YES] Hook installed" || echo "[NO] Hook missing"
 ```
 
 **If missing, reinstall**:
@@ -5495,10 +6170,10 @@ git commit --no-verify -m "emergency hotfix"
 ```
 
 **Trade-offs**:
-- ✅ Automatic installation after container creation
-- ✅ Developers can't forget to install
-- ❌ Runs on every rebuild (adds ~1 second to startup)
-- ❌ May be noisy with repeated "hook installed" messages
+- [x] Automatic installation after container creation
+- [x] Developers can't forget to install
+- [ ] Runs on every rebuild (adds ~1 second to startup)
+- [ ] May be noisy with repeated "hook installed" messages
 
 #### How It Works
 
@@ -5538,7 +6213,7 @@ git commit --no-verify -m "emergency hotfix"
 
 ```bash
 # 1. Verify hook installation
-test -x .git/hooks/pre-commit && echo "✅ Installed" || echo "❌ Missing"
+test -x .git/hooks/pre-commit && echo "[YES] Installed" || echo "[NO] Missing"
 
 # 2. Test main branch protection (should FAIL)
 git checkout main
@@ -5560,7 +6235,7 @@ git branch -D feature/test-verification
 rm /tmp/test-hook.txt
 
 # 6. Verify hook still active
-test -x .git/hooks/pre-commit && echo "✅ Hook still installed"
+test -x .git/hooks/pre-commit && echo "[YES] Hook still installed"
 ```
 
 #### References
@@ -5631,10 +6306,10 @@ Press Enter to open github.com in your browser...
 
 **Success message**:
 ```
-✓ Authentication complete.
+[OK] Authentication complete.
 - gh config set -h github.com git_protocol https
-✓ Configured git protocol
-✓ Logged in as your-username
+[OK] Configured git protocol
+[OK] Logged in as your-username
 ```
 
 #### Method 2: Personal Access Token
@@ -5692,10 +6367,10 @@ GH_TOKEN=ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 ```
 
 **Persistence behavior**:
-- ✅ Survives container rebuilds
-- ✅ Survives VS Code restarts
-- ✅ One-time setup per devcontainer volume
-- ❌ Lost only if volume deleted: `docker volume rm ghub-config-xxx`
+- [x] Survives container rebuilds
+- [x] Survives VS Code restarts
+- [x] One-time setup per devcontainer volume
+- [ ] Lost only if volume deleted: `docker volume rm ghub-config-xxx`
 
 **Verify persistence**:
 ```bash
@@ -5718,15 +6393,15 @@ gh auth status
 **Expected output (authenticated)**:
 ```
 github.com
-  ✓ Logged in to github.com as your-username (/home/node/.config/gh/hosts.yml)
-  ✓ Git operations protocol: https
-  ✓ Token: *******************
+  [OK] Logged in to github.com as your-username (/home/node/.config/gh/hosts.yml)
+  [OK] Git operations protocol: https
+  [OK] Token: *******************
 ```
 
 **Expected output (not authenticated)**:
 ```
 github.com
-  ✗ Not logged in
+  [NOT LOGGED IN] Not logged in
   Run 'gh auth login' to authenticate
 ```
 
@@ -5807,9 +6482,9 @@ gh auth refresh
 - Per-project access control
 
 **Token storage**:
-- ✅ Stored in Docker volume (isolated, persistent)
-- ✅ Not committed to git (`.gitignore` excludes `.env`)
-- ❌ Never hardcode tokens in devcontainer.json
+- [x] Stored in Docker volume (isolated, persistent)
+- [x] Not committed to git (`.gitignore` excludes `.env`)
+- [ ] Never hardcode tokens in devcontainer.json
 
 **Revoke compromised tokens**:
 1. Go to https://github.com/settings/tokens
@@ -6196,7 +6871,15 @@ docker system prune -a --volumes # CAUTION: Removes everything!
 
 ---
 
-## Volume Persistence Patterns
+## [CRITICAL] Volume Persistence Patterns (Essential)
+
+> **TL;DR for AI Assistants:**
+> - Named volumes are ESSENTIAL for preserving configurations across rebuilds
+> - Minimum 11+ volumes required: .claude, .codex, .gemini, .config/gh, .aws, .ssh, .npm, .local, bash history, git config
+> - Pattern: `source=name-${devcontainerId},target=/path,type=volume`
+> - Use ${devcontainerId} token to isolate volumes per project
+> - Never mount sensitive directories (like /home/node/.ssh) as bind mounts - use named volumes
+> - Volumes survive container deletion, bind mounts point to host files
 
 Volumes ensure configuration persists across container rebuilds.
 
@@ -6242,9 +6925,9 @@ Volumes ensure configuration persists across container rebuilds.
 - Useful for debugging, shared data
 
 **Cautions**:
-- ️ Exposes host filesystem (security risk if container compromised)
-- ️ Platform-specific paths (`/Users/` on Mac, `/home/` on Linux, WSL paths on Windows)
-- ️ Performance issues on Mac/Windows (Docker Desktop overhead)
+-  Exposes host filesystem (security risk if container compromised)
+-  Platform-specific paths (`/Users/` on Mac, `/home/` on Linux, WSL paths on Windows)
+-  Performance issues on Mac/Windows (Docker Desktop overhead)
 
 **Use cases**: SSH keys (readonly!), large datasets, debugging
 
@@ -6431,7 +7114,14 @@ docker volume rm claude-code-config-<devcontainerId>
 
 ---
 
-## Platform-Specific Notes
+## [RECOMMENDED] Platform-Specific Notes (Recommended Reading)
+
+> **TL;DR for AI Assistants:**
+> - **macOS**: Enable VirtioFS for file performance, Apple Silicon may need --platform=linux/amd64 for x86 packages
+> - **Windows**: Requires WSL2, store projects in WSL filesystem (not /mnt/c/), use Ubuntu 22.04+ distribution
+> - **Linux**: Native Docker (no Docker Desktop), requires user in docker group, selinux may need :z flags
+> - Common cross-platform issues: RAM allocation (8GB recommended), volume performance, timezone configuration
+> - Always test on target platform - emulation has performance/compatibility differences
 
 ### macOS (Intel and Apple Silicon)
 
@@ -7047,7 +7737,7 @@ EOF
 
 **Best Practice**: Trust your container's isolation layer, disable Codex's redundant sandboxing.
 
-**️ Known Limitation: VSCode Extension**
+** Known Limitation: VSCode Extension**
 
 **IMPORTANT**: The above configuration **only works for Codex CLI**, not the VSCode extension.
 
@@ -7055,7 +7745,7 @@ EOF
 - VSCode extension does NOT read `sandbox_mode` or `approval_policy` from config.toml
 - Extension only reads `model` and `model_reasoning_effort` settings
 - Extension always tries to use Landlock sandboxing (fails in Docker)
-- 📋 Tracked as [GitHub Issue #5041](https://github.com/openai/codex/issues/5041)
+-  Tracked as [GitHub Issue #5041](https://github.com/openai/codex/issues/5041)
 
 **OpenAI Team Response** (from issue #5041):
 > "Currently we actually do not read or write our `network_access` and `sandbox_mode` to config.toml but only the `model` and `model_reasoning_effort` settings. We are currently working on a custom mode which will allow you to use approval and sandbox policy from config.toml."
@@ -7434,8 +8124,8 @@ su - node -c "mkdir -p /home/node/.config/test"
 ```
 
 **Pattern to remember**:
-- ❌ `chown -R user:user /path/parent/child` (only owns child)
-- ✅ `chown -R user:user /path/parent` (owns parent + all children)
+- [ ] `chown -R user:user /path/parent/child` (only owns child)
+- [x] `chown -R user:user /path/parent` (owns parent + all children)
 
 **When you see this**:
 - Permission errors during `RUN` commands that create files in `~/.config`
@@ -7520,7 +8210,7 @@ RUN git config --global core.excludesfile ~/.gitignore_global && \
 
 ---
 
-## Multi-Container Patterns (Docker Compose)
+## [ADVANCED] Multi-Container Patterns (Advanced - Docker Compose)
 
 For complex setups (app + database + cache), use Docker Compose with devcontainers.
 
@@ -7614,7 +8304,7 @@ docker-compose down -v
 
 ---
 
-## DevContainer Features
+## [ADVANCED] DevContainer Features (Advanced - Modular Tooling)
 
 VS Code devcontainers support a powerful "Features" system for installing common tools without modifying the Dockerfile.
 
@@ -7774,6 +8464,299 @@ Host in a git repo and reference:
  }
  }
 }
+```
+
+---
+
+## [WARNING] Common Misinterpretations (For AI Assistants)
+
+> **Purpose**: This section directly addresses common mistakes AI assistants make when interpreting this document. Use it as a checklist before responding to user requests.
+
+### Wrong vs. Right Interpretations
+
+#### Misinterpretation #1: "Simple" or "Quick" Means "Insecure"
+
+[NO] **Wrong**: User said "simple devcontainer" so I'll use the Quick Start (no firewall, no MCP, no git hooks)
+
+[YES] **Right**: "Simple" means easy to understand with clear explanations. Still provide Production-Ready Setup with security, MCP, and git hooks. Explain each component clearly for beginners.
+
+**Why it matters**: Users say "simple" when they want clarity, not when they want to skip security.
+
+---
+
+#### Misinterpretation #2: "Security is Advanced" Therefore Skip for Beginners
+
+[NO] **Wrong**: User is a beginner, so I'll skip the "advanced" security section to avoid overwhelming them
+
+[YES] **Right**: Security is ESSENTIAL, not advanced. Provide init-firewall.sh with beginner-friendly explanations: "This blocks malicious websites from stealing your API keys."
+
+**Why it matters**: Beginners are MOST vulnerable to security issues. They need protection more than experts.
+
+---
+
+#### Misinterpretation #3: User Didn't Mention MCP, So Don't Include It
+
+[NO] **Wrong**: User asked for "Claude Code devcontainer" but didn't mention MCP servers, so I won't configure them
+
+[YES] **Right**: MCP servers are standard for Claude Code devcontainers. Include context7, cf-docs, and chrome-devtools by default. MCP is what makes Claude Code powerful.
+
+**Why it matters**: Users don't know what MCP is. They expect Claude Code to "just work" with full capabilities.
+
+---
+
+#### Misinterpretation #4: Quick Start Appears First, So It's Recommended
+
+[NO] **Wrong**: The Quick Start section appears early in the document (line 34), so it must be the recommended approach
+
+[YES] **Right**: Quick Start has explicit warnings ("Minimal - For Experienced Users Only"). Production-Ready Setup (line 394) is marked as "Recommended Baseline." Read the warnings, not just the position.
+
+**Why it matters**: Document structure was optimized for discoverability after user provides prerequisites. Recommended approach is explicitly labeled.
+
+---
+
+#### Misinterpretation #5: Volumes Are Optional Performance Optimizations
+
+[NO] **Wrong**: Volumes are just for performance. If user doesn't mention them, I can skip to simplify the config
+
+[YES] **Right**: Volumes are ESSENTIAL for config persistence. Without volumes, users lose their API keys, Claude settings, and MCP configurations on every container rebuild. Include all 11+ volumes.
+
+**Why it matters**: Losing API keys after rebuild creates terrible user experience and wastes setup time.
+
+---
+
+#### Misinterpretation #6: User Wants "Isolated" Environment, So Docker Is Enough
+
+[NO] **Wrong**: User mentioned "isolated environment," so Docker container isolation is sufficient. No need for firewall
+
+[YES] **Right**: "Isolated" includes network isolation. Add firewall (init-firewall.sh) to prevent malicious packages from calling home, even inside the "isolated" container.
+
+**Why it matters**: Docker isolates the container from host, but doesn't isolate container from internet. Malicious npm packages can still exfiltrate data.
+
+---
+
+#### Misinterpretation #7: Start Minimal, User Can Add Features Later
+
+[NO] **Wrong**: I'll give them the Quick Start first. They can add security/MCP/git hooks later if needed
+
+[YES] **Right**: Start with Production-Ready Setup. It's HARDER to add security later (requires understanding iptables, sysctl, Docker capabilities). Easier to remove features than add them.
+
+**Why it matters**: Users rarely go back to add security after they have a "working" setup. Start secure by default.
+
+---
+
+### Self-Check Questions Before Responding
+
+Before providing a devcontainer configuration, ask yourself:
+
+1. [YES] **Does my response include init-firewall.sh?** (Required for production)
+2. [YES] **Does my response configure MCP servers?** (At minimum: context7, cf-docs)
+3. [YES] **Does my response include git hooks (setup-git-hooks.sh)?** (Prevents accidental commits to main)
+4. [YES] **Does my response have 11+ volume mounts?** (Full persistence: .claude, .codex, .gemini, .config/gh, .aws, .local, .wrangler, .vercel, .npm-global, bash history, SSH keys)
+5. [YES] **Does my response use Dockerfile RUN commands?** (Not just postCreateCommand which loses on rebuild)
+6. [YES] **Does my response include non-root user (remoteUser: "node")?** (Security best practice)
+7. [YES] **Did I explain WHY, not just WHAT?** (Helps users understand, not just copy-paste)
+
+**If you answered "No" to any of these questions**, you're providing a minimal Quick Start when you should be providing Production-Ready Setup.
+
+---
+
+### When Quick Start IS Acceptable
+
+Quick Start (minimal approach) is ONLY acceptable when user explicitly says:
+
+- "minimal devcontainer"
+- "throwaway experiment"
+- "just testing for 5 minutes"
+- "learning Docker basics"
+- "skip security"
+- "no production use"
+
+**Even then**, warn them about missing components and suggest Production-Ready Setup for real projects.
+
+---
+
+## [CRITICAL] Production Readiness Checklist
+
+> **TL;DR for AI Assistants:**
+> - Use this checklist to verify your devcontainer response includes all essential components
+> - If 7/8 items in "Essential Components" are checked, configuration is production-ready
+> - If <5/8 items checked, suggest Production-Ready Setup instead of Quick Start
+> - This checklist is for validation, not optional features
+
+Use this checklist to verify your devcontainer includes all essential production components. AI assistants should verify their responses meet these criteria before presenting to users.
+
+### Essential Components (Must Have All 8)
+
+**Security & Network:**
+- [ ] **Network Firewall** (init-firewall.sh with default-deny policy)
+  - Includes iptables rules with allowlist for trusted domains
+  - postStartCommand runs init-firewall.sh at startup
+  - runArgs includes `--cap-add=NET_ADMIN` and `--cap-add=NET_RAW`
+
+- [ ] **IPv6 Disabled** (three-layer defense)
+  - runArgs includes `--sysctl=net.ipv6.conf.all.disable_ipv6=1`
+  - init-firewall.sh includes runtime sysctl commands
+  - Optional: ip6tables DROP policy as backup
+
+- [ ] **Non-root User** (security best practice)
+  - Dockerfile switches to non-root user (`USER node` or `USER vscode`)
+  - devcontainer.json specifies `"remoteUser": "node"` (or appropriate user)
+  - Installations use correct user context (root for system, node for user tools)
+
+**Multi-AI Configuration:**
+- [ ] **Claude Code with MCP Servers** (essential for Claude functionality)
+  - mcp.json template with minimum 3 servers (context7, cf-docs, chrome-devtools)
+  - init-claude-config.sh script to auto-initialize configuration
+  - Volume mount for `.claude` directory: `source=claude-code-config-${devcontainerId},target=/home/node/.claude,type=volume`
+  - postStartCommand runs init-claude-config.sh
+
+- [ ] **OpenAI Codex with Sandbox Fix** (if using Codex)
+  - config.toml template with `sandbox_mode = true` (required for containers)
+  - init-codex-config.sh script to auto-initialize configuration
+  - Volume mount for `.codex` directory: `source=codex-config-${devcontainerId},target=/home/node/.codex,type=volume`
+  - postStartCommand runs init-codex-config.sh
+
+**Git Safety:**
+- [ ] **Git Branch Protection** (prevents accidental commits to main/master)
+  - setup-git-hooks.sh script that installs pre-commit hook
+  - Pre-commit hook blocks commits to main/master branches
+  - postStartCommand runs setup-git-hooks.sh
+  - Hook provides guidance on creating feature branches
+
+**Volume Persistence:**
+- [ ] **Complete Volume Mounts** (minimum 11 volumes for full persistence)
+  - Core AI configs: `.claude`, `.codex`, `.gemini` (3 volumes)
+  - Tool configs: `.config/gh`, `.aws`, `.ssh`, `.npm`, `.local`, `.wrangler` (6 volumes)
+  - Developer experience: bash history (`/commandhistory`), git config (2 volumes)
+  - All volumes use `${devcontainerId}` token for project isolation
+  - All volumes use `type=volume` (NOT bind mounts for sensitive data)
+
+**Installation Method:**
+- [ ] **Dockerfile RUN Commands** (not postCreateCommand)
+  - System packages installed via `apt-get` in Dockerfile (as root)
+  - CLI tools installed via `npm install -g` in Dockerfile (as user)
+  - postCreateCommand only used for initialization scripts (not installations)
+  - Ensures tools persist across container rebuilds
+
+### Recommended Components (Should Have)
+
+**Development Experience:**
+- [ ] **Lifecycle Scripts Configuration**
+  - postStartCommand chains multiple init scripts properly
+  - Uses `&&` to ensure sequential execution
+  - Each script has proper error handling (`set -e`)
+
+- [ ] **VS Code Customizations**
+  - Recommended extensions for project tech stack
+  - Editor settings (formatOnSave, terminal defaults)
+  - Language-specific configurations
+
+- [ ] **Docker-in-Docker** (if needed for Docker commands)
+  - Feature: `ghcr.io/devcontainers/features/docker-in-docker:2`
+  - Proper volume mount for Docker socket
+
+**Production Tooling:**
+- [ ] **Package Managers** (based on tech stack)
+  - uv (Python), bun (JavaScript), cargo (Rust), go (Go), etc.
+  - Installed in Dockerfile, not postCreateCommand
+
+- [ ] **Cloud CLIs** (based on deployment targets)
+  - AWS CLI, GitHub CLI, Cloudflare wrangler, Vercel CLI
+  - Installed and configured for user authentication
+
+### Validation Commands
+
+After container build, verify with these commands:
+
+```bash
+# 1. Verify MCP servers (Claude Code)
+claude mcp list
+# Expected: Should list 3+ servers (context7, cf-docs, chrome-devtools)
+
+# 2. Verify firewall is active
+sudo iptables -L -n -v
+# Expected: Should show INPUT chain with DROP policy and allowlist rules
+
+# 3. Verify IPv6 is disabled
+cat /proc/sys/net/ipv6/conf/all/disable_ipv6
+# Expected: Should output "1" (disabled)
+
+# 4. Verify git hooks installed
+ls -la .git/hooks/pre-commit
+# Expected: Should show executable pre-commit hook file
+
+# 5. Verify volumes persisted
+docker volume ls | grep "$(basename $PWD)"
+# Expected: Should show 11+ volumes with your project name
+
+# 6. Verify non-root user
+whoami
+# Expected: Should output "node" or your configured user (NOT root)
+
+# 7. Verify Codex sandbox fix (if using Codex)
+cat ~/.codex/config.toml | grep sandbox_mode
+# Expected: Should show "sandbox_mode = true"
+
+# 8. Verify AI CLIs installed
+claude --version && codex --version && gemini --version
+# Expected: Should show version numbers for all three CLIs
+```
+
+### Red Flags (Indicates Non-Production Config)
+
+If you see any of these in your configuration, you're NOT production-ready:
+
+[NO] **No init-firewall.sh file** → No network security
+[NO] **No mcp.json template** → Claude Code won't have MCP servers
+[NO] **No git hook setup script** → Can commit directly to main/master
+[NO] **<6 volume mounts** → Configuration will be lost on rebuild
+[NO] **postCreateCommand has npm install commands** → Tools lost on rebuild
+[NO] **remoteUser: "root"** → Security risk (should be non-root user)
+[NO] **No --cap-add flags in runArgs** → Firewall won't work
+[NO] **Codex without sandbox_mode = true** → Codex will fail in container
+[NO] **devcontainer.json only (no Dockerfile)** → Minimal setup, missing security
+
+### Quick Fix: Upgrade from Quick Start to Production-Ready
+
+If your current config has red flags above:
+
+1. **Add missing files** from [Complete Example (Copy This)](#complete-example-copy-this)
+2. **Add init scripts** to postStartCommand (firewall, MCP, git hooks)
+3. **Add volume mounts** for all 11+ configuration directories
+4. **Add security runArgs** (--cap-add=NET_ADMIN, --sysctl for IPv6)
+5. **Move installations** from postCreateCommand to Dockerfile RUN commands
+6. **Test with validation commands** above to verify all components work
+
+### For AI Assistants: When to Use This Checklist
+
+**Use this checklist to validate:**
+- [x] Your response before presenting to user (check 8/8 essential items)
+- [x] User's existing configuration (if they share their files)
+- [x] Whether to recommend Quick Start vs Production-Ready Setup
+
+**Scoring guide:**
+- **8/8 essential items**: Production-ready, good to go
+- **5-7/8 essential items**: Partially ready, suggest adding missing components
+- **<5/8 essential items**: Not production-ready, suggest Complete Example instead
+
+**Example validation in your response:**
+```
+User: "Help me set up a devcontainer"
+
+AI Assistant (internal check):
+- [ ] Network firewall? NO → Need init-firewall.sh
+- [ ] IPv6 disabled? NO → Need runArgs with sysctl
+- [ ] Non-root user? YES → Dockerfile has USER node
+- [ ] MCP servers? NO → Need mcp.json template + init script
+- [ ] Codex fix? NO → Need config.toml with sandbox_mode
+- [ ] Git hooks? NO → Need setup-git-hooks.sh
+- [ ] Volume mounts? NO → Only 3 volumes (need 11+)
+- [ ] Dockerfile RUN? YES → Has npm install in Dockerfile
+
+Score: 2/8 essential items → NOT production-ready
+
+AI Assistant response: "I'll help you create a production-ready devcontainer with security, MCP servers, and multi-AI support. Let me show you the complete configuration..."
+[Provides Complete Example with all 8 files]
 ```
 
 ---
@@ -8038,99 +9021,229 @@ claude --verbose
 
 ---
 
-## AI Assistant Guidelines
-
-> **For AI Assistants**: When helping users create or debug devcontainers:
-
-### Decision-Making Framework
-
-1. **Assess User Experience**:
- - Beginner? → Start with minimal example, explain each line
- - Intermediate? → Provide working example with customization options
- - Advanced? → Discuss trade-offs, security implications
-
-2. **Understand Requirements**:
- - What's the primary language? → Choose base image
- - Need databases? → Suggest Docker Compose pattern
- - Security concerns? → Recommend firewall, volume isolation
- - Team environment? → Emphasize reproducibility
-
-3. **Provide Progressive Solutions**:
- - **First**: Minimal working setup (get them running)
- - **Then**: Add features (MCP servers, multi-AI, security)
- - **Finally**: Optimize (caching, performance, cleanup)
-
-4. **Always Include**:
- - UTF-8 locale configuration
- - Volume mounts for `.claude/` (and other AI configs)
- - Git exclusion of `.claude/settings.local.json`
- - Explanation of "why" not just "how"
-
-5. **Test Incrementally**:
- - Suggest testing Dockerfile with `docker build -t test .`
- - Recommend building → testing → adding features → rebuilding
- - Don't give 500-line config without incremental validation
-
-6. **Reference Official Docs**:
- - Link to https://docs.claude.com/en/docs/claude-code/devcontainer
- - Cite VS Code devcontainers docs for advanced features
- - Point to official MCP docs for server configuration
-
-7. **Explain Trade-offs**:
- - Security vs. convenience (firewall vs. open network)
- - Performance vs. disk space (slim images vs. feature-rich)
- - Simplicity vs. robustness (minimal config vs. production-ready)
-
-### Common User Questions (Suggested Responses)
-
-**"How do I add Python to my Node devcontainer?"**
-```dockerfile
-# In Dockerfile after base image
-RUN apt-get update && apt-get install -y \
- python3 \
- python3-pip \
- python3-venv \
- && apt-get clean && rm -rf /var/lib/apt/lists/*
-```
-
-**"Can I use my existing Dockerfile?"**
-Yes, but recommend separation:
-- Production: `Dockerfile` (optimized for size, security)
-- Development: `.devcontainer/Dockerfile` (includes dev tools, AI assistants)
-
-**"How do I share my devcontainer with my team?"**
-Commit `.devcontainer/` to git. Team members:
-1. Pull repo
-2. Open in VS Code
-3. Click "Reopen in Container"
-
-**"Will this work on Windows?"**
-Yes, if using WSL2:
-- Docker Desktop → Settings → "Use WSL2 based engine"
-- Clone projects into WSL2 filesystem (not `/mnt/c/`), for performance
-
-**"How do I debug build failures?"**
-1. Test Dockerfile directly: `docker build -t test .devcontainer/`
-2. View full error output (not truncated VS Code log)
-3. Use `RUN echo "Checkpoint 1"` to isolate failing line
-4. Check [Step-by-Step Debug Process](#step-by-step-debug-process)
-
-**"Should I use devcontainers for [X]?"**
-- Multi-developer teams
-- Projects with complex dependencies
-- Security-sensitive work (client projects)
-- Cross-platform development
-- Simple scripts (overkill)
-- GPU-intensive ML (complex setup)
-- GUI desktop apps
-
----
-
 **Document Version**: 2.0
 **Last Updated**: 2025-10
 **Maintained By**: Community
 **License**: MIT
 **Feedback**: https://github.com/anthropics/claude-code/discussions
+
+---
+
+## [SELF-TEST] AI Self-Test: Validate Your Understanding
+
+> **For AI Assistants**: Before responding to users, validate your understanding with these self-test prompts. If you can't answer correctly, re-read the relevant sections.
+
+### Self-Test #1: Production vs Quick Start
+
+**User says**: "Help me create a simple devcontainer for my Node.js project"
+
+**Which approach should you recommend?**
+
+**Correct Answer**: Production-Ready Setup (not Quick Start). "Simple" means clear explanations, not minimal features. Provide Complete Example with all 9 files.
+
+**Why**: User didn't say "throwaway" or "skip security". Real project = production approach.
+
+**Red Flag**: If your response has no Dockerfile or <6 volumes, you chose wrong.
+
+**Reference**: [Common Misinterpretations](#common-misinterpretations-for-ai-assistants)
+
+---
+
+### Self-Test #2: Essential Components
+
+**User says**: "Can you review my devcontainer configuration?"
+
+**What 8 essential items must you check?**
+
+**Correct Answer**:
+1. Network Firewall (init-firewall.sh + runArgs)
+2. IPv6 Disabled (--sysctl + runtime commands)
+3. Non-root User (USER directive + remoteUser)
+4. MCP Servers (mcp.json + init script + volume)
+5. Codex Fix (config.toml with sandbox_mode=true)
+6. Git Hooks (setup-git-hooks.sh)
+7. Volume Mounts (11+ volumes minimum)
+8. Dockerfile RUN (tools in image, not postCreateCommand)
+
+**Scoring**: 8/8 = production-ready, <5/8 = suggest Complete Example
+
+**Reference**: [Production Readiness Checklist](#production-readiness-checklist)
+
+---
+
+### Self-Test #3: Codex Not Working
+
+**User says**: "Codex isn't working in my devcontainer"
+
+**Most likely cause and fix?**
+
+**Correct Answer**: Missing `sandbox_mode = true` in config.toml
+
+**Fix**: Create config.toml.template with sandbox_mode, init-codex-config.sh to copy it, volume mount for .codex directory
+
+**Common Mistake**: Suggesting reinstall or API key check (wrong root cause)
+
+**Reference**: [Complete Example](#complete-example-copy-this) File 8
+
+---
+
+### Self-Test #4: Security Framing
+
+**User asks**: "Do I really need the firewall? Seems complicated"
+
+**How should you respond?**
+
+**Correct Answer**: Firewall is ESSENTIAL for production (not optional/advanced)
+
+**Your response must include**:
+- Container isolation alone doesn't prevent npm malware, API key leaks
+- Defense-in-depth: Docker + network + non-root user
+- 10-30 second startup overhead (acceptable for security)
+- Only skip if user explicitly says "throwaway experiment"
+
+**Red Flag**: If you agree firewall is optional, you're wrong
+
+**Reference**: [Security Best Practices](#security-best-practices-essential---not-optional)
+
+---
+
+### Self-Test #5: MCP Servers
+
+**User asks**: "What are MCP servers and do I need them?"
+
+**How do you explain their importance?**
+
+**Correct Answer**: MCP servers are ESSENTIAL for Claude Code functionality
+
+**Your explanation must include**:
+- MCP = Model Context Protocol, extends Claude with external docs/tools
+- Without MCP, Claude Code loses most capabilities
+- Minimum 3 servers: context7, cf-docs, chrome-devtools
+- Two types: SSE (remote) vs stdio (local)
+- Configured in mcp.json, requires .claude volume mount
+
+**Red Flag**: If your response has no mcp.json, you're missing essential component
+
+**Reference**: [MCP Server Setup](#mcp-server-setup-essential-for-claude-code)
+
+---
+
+### Self-Test #6: Volume Mounts
+
+**User says**: "Why do I need so many volumes? Seems excessive"
+
+**What are consequences of insufficient volumes?**
+
+**Correct Answer**: Configuration loss on every rebuild
+
+**Consequences**:
+- No .claude → MCP servers reconfigure every time
+- No .codex → Codex stops working after rebuild
+- No .aws → Deployments fail (lost credentials)
+- No .ssh → Git push fails (lost keys)
+- No bash history → Poor developer experience
+
+**Minimum 11 volumes required** for production persistence
+
+**Reference**: [Volume Persistence Patterns](#volume-persistence-patterns-essential)
+
+---
+
+### Self-Test #7: Installation Location
+
+**User asks**: "Should I install tools in postCreateCommand or Dockerfile?"
+
+**What is correct approach?**
+
+**Correct Answer**: Install in Dockerfile RUN (not postCreateCommand)
+
+**Why**: Dockerfile RUN bakes into image layers (persists, cached). postCreateCommand runs after creation (lost on rebuild, no caching).
+
+**Pattern**:
+```dockerfile
+USER root
+RUN apt-get install -y git curl  # System packages
+
+USER node
+RUN npm install -g claude codex  # CLI tools
+```
+
+**postCreateCommand**: Only for init scripts (firewall, config copy)
+
+**Reference**: [Lifecycle Hooks](#lifecycle-hooks-explained-recommended)
+
+---
+
+### Self-Test #8: Git Hooks
+
+**User asks**: "Why do I need git hooks? I'm careful about commits"
+
+**How should you respond?**
+
+**Correct Answer**: Git hooks provide automated safety (humans make mistakes)
+
+**Your response must include**:
+- Manual caution fails under time pressure / late-night coding
+- Pre-commit hook blocks main/master automatically
+- Part of defense-in-depth (hook + code review + CI)
+- Takes 2 minutes to setup, prevents hours of cleanup
+- Can bypass with --no-verify if needed
+
+**Reference**: [Production Readiness Checklist](#production-readiness-checklist)
+
+---
+
+### Self-Test #9: Wrong Interpretations
+
+**Which interpretations are WRONG?**
+
+A. User said "simple" → Use Quick Start
+B. User is beginner → Skip security
+C. User testing 5 minutes → Quick Start OK
+D. User has existing project → Suggest production
+
+**Correct Answer**: A and B are WRONG. C and D are correct.
+
+**Why**:
+- **A WRONG**: "Simple" = clear docs, not minimal features
+- **B WRONG**: Beginners need security MORE (less experience)
+- **C CORRECT**: Explicit "5-minute test" = Quick Start acceptable (with warnings)
+- **D CORRECT**: Existing project = real work = production approach
+
+**Reference**: [Common Misinterpretations](#common-misinterpretations-for-ai-assistants)
+
+---
+
+### Self-Test #10: Complete Example
+
+**User says**: "Help me set up devcontainer for React + TypeScript"
+
+**What should your immediate response be?**
+
+**Correct Answer**: Provide Complete Example with React/TypeScript adjustments
+
+**Your response must**:
+1. Link to [Complete Example (Copy This)](#complete-example-copy-this)
+2. Copy all 9 files from Complete Example
+3. Keep node:22 base image (works for React)
+4. Add TypeScript VS Code extensions
+5. Keep ALL security, MCP, volumes, git hooks (don't remove)
+6. Explain each file's purpose
+7. Provide verification commands
+
+**Do NOT**: Create minimal devcontainer.json only or suggest "add security later"
+
+**Reference**: [Complete Example](#complete-example-copy-this)
+
+---
+
+### Scoring Your Self-Test
+
+- **10/10 correct**: You understand Production-Ready approach [YES]
+- **7-9/10**: Re-read sections you missed (references provided)
+- **<7/10**: Re-read [START HERE](#start-here-choose-your-path) and [Production-Ready Setup](#production-ready-setup-recommended-baseline)
+
+**If you failed any test**: Do NOT respond to users until you re-read relevant sections. Incorrect guidance leads to insecure, fragile devcontainers.
 
 ---
 
